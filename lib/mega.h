@@ -28,7 +28,6 @@
 #define MEGA_ERROR mega_error_quark()
 
 enum {
-	MEGA_ERROR_AGAIN,
 	MEGA_ERROR_NO_HANDLE,
 	MEGA_ERROR_OTHER
 };

@@ -3240,13 +3240,11 @@ static void tman_worker_upload_chunk(struct transfer_chunk *c, struct transfer_w
 		// check for numeric error code
 		if (response->len < 10 && g_regex_match_simple("^-(\\d+)$", response->str, 0, 0)) {
 			int code = atoi(response->str);
-			int mega_err = MEGA_ERROR_OTHER;
 			const char* err_str = "???";
 
 			switch (code) {
 				case -3:
 					err_str = "EAGAIN";
-					mega_err = MEGA_ERROR_AGAIN;
 					break;
 				case -4:
 					err_str = "EFAILED";
@@ -3268,7 +3266,7 @@ static void tman_worker_upload_chunk(struct transfer_chunk *c, struct transfer_w
 					break;
 			}
 
-			err = g_error_new(MEGA_ERROR, mega_err, "Server returned error code %d (%s)", code, err_str);
+			err = g_error_new(MEGA_ERROR, MEGA_ERROR_OTHER, "Server returned error code %d (%s)", code, err_str);
 			goto err;
 		}
 
@@ -3681,8 +3679,7 @@ static gpointer tman_manager_thread_fn(gpointer data)
 				// transfer is in error state and is being aborted
 				tman_debug("M: transfer is being aborted, chunk %d fail ignored\n", c->index);
 			} else {
-				if (g_error_matches(msg->error, MEGA_ERROR, MEGA_ERROR_AGAIN)
-						|| g_error_matches(msg->error, HTTP_ERROR, HTTP_ERROR_TIMEOUT)
+				if (g_error_matches(msg->error, HTTP_ERROR, HTTP_ERROR_TIMEOUT)
 						|| g_error_matches(msg->error, HTTP_ERROR, HTTP_ERROR_SERVER_BUSY)
 						|| g_error_matches(msg->error, HTTP_ERROR, HTTP_ERROR_NO_RESPONSE)) {
 
