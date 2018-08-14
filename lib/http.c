@@ -269,6 +269,21 @@ static gboolean to_error(struct http* h, CURLcode res, GError** err)
 			g_set_error(err, HTTP_ERROR, HTTP_ERROR_OTHER, "Can't get http status code");
 	} else if (res == CURLE_OPERATION_TIMEDOUT)
 		g_set_error(err, HTTP_ERROR, HTTP_ERROR_TIMEOUT, "CURL timeout: %s", curl_easy_strerror(res));
+	else if (res == CURLE_RECV_ERROR
+			|| res == CURLE_SEND_ERROR
+			|| res == CURLE_SSL_CONNECT_ERROR
+			|| res == CURLE_UPLOAD_FAILED
+#if CURL_AT_LEAST_VERSION(7, 50, 3)
+			|| res == CURLE_WEIRD_SERVER_REPLY
+#endif
+#if CURL_AT_LEAST_VERSION(7, 49, 0)
+			|| res == CURLE_HTTP2_STREAM
+#endif
+#if CURL_AT_LEAST_VERSION(7, 38, 0)
+			|| res == CURLE_HTTP2
+#endif
+			|| res == CURLE_COULDNT_CONNECT)
+		g_set_error(err, HTTP_ERROR, HTTP_ERROR_COMM_FAILURE, "CURL error: %s", curl_easy_strerror(res));
 	else if (res == CURLE_GOT_NOTHING)
 		g_set_error(err, HTTP_ERROR, HTTP_ERROR_NO_RESPONSE, "CURL error: %s", curl_easy_strerror(res));
 	else
