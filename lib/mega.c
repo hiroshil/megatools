@@ -3679,11 +3679,11 @@ static gpointer tman_manager_thread_fn(gpointer data)
 				// transfer is in error state and is being aborted
 				tman_debug("M: transfer is being aborted, chunk %d fail ignored\n", c->index);
 			} else {
-				if (g_error_matches(msg->error, HTTP_ERROR, HTTP_ERROR_TIMEOUT)
+				if (g_error_matches(msg->error, HTTP_ERROR, HTTP_ERROR_COMM_FAILURE)
+						|| g_error_matches(msg->error, HTTP_ERROR, HTTP_ERROR_TIMEOUT)
 						|| g_error_matches(msg->error, HTTP_ERROR, HTTP_ERROR_SERVER_BUSY)
 						|| g_error_matches(msg->error, HTTP_ERROR, HTTP_ERROR_NO_RESPONSE)) {
-
-					if (c->failures_count > 6) {
+					if (c->failures_count > 8) {
 						g_printerr("WARNING: chunk upload failed too many times (%s), aborting transfer\n", msg->error->message);
 
 						// mark transfer as aborted
@@ -4041,12 +4041,10 @@ try_again:
 		/* out: */ &up_handle, meta_mac, &local_err);
 
 	if (!transfer_ok) {
-		if (g_error_matches(local_err, MEGA_ERROR, MEGA_ERROR_NO_HANDLE)) {
-			if (retries-- > 0) {
-				g_printerr("WARNING: Mega didn't return an upload handle, retrying transfer\n");
-				g_clear_error(&local_err);
-				goto try_again;
-			}
+		if (retries-- > 0) {
+			g_printerr("WARNING: Mega upload failed (%s), retrying transfer (%d retries left)\n", local_err ? local_err->message : "???", retries);
+			g_clear_error(&local_err);
+			goto try_again;
 		}
 
 		g_propagate_prefixed_error(err, local_err, "Data upload failed: ");
