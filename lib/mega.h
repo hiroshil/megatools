@@ -92,6 +92,7 @@ struct mega_node {
 	gint type;
 	guint64 size;
 	glong timestamp;
+	glong local_ts;
 
 	// call addlinks after refresh to get links populated
 	gchar *link;
@@ -126,6 +127,7 @@ struct mega_download_data_params {
 #define MEGA_DEBUG_FS 0x04
 #define MEGA_DEBUG_HTTP 0x08
 #define MEGA_DEBUG_TMAN 0x10
+#define MEGA_DEBUG_APP 0x20
 
 extern gint mega_debug;
 

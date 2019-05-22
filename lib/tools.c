@@ -82,6 +82,8 @@ static gboolean opt_debug_callback(const gchar *option_name, const gchar *value,
 				mega_debug |= MEGA_DEBUG_HTTP;
 			else if (g_ascii_strcasecmp(*opt, "tman") == 0)
 				mega_debug |= MEGA_DEBUG_TMAN;
+			else if (g_ascii_strcasecmp(*opt, "app") == 0)
+				mega_debug |= MEGA_DEBUG_APP;
 
 			opt++;
 		}

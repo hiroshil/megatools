@@ -1275,9 +1275,27 @@ static gchar *encode_node_attrs(const gchar *name)
 }
 
 // }}}
+// {{{ encode_node_attrs
+
+static gchar *encode_node_attrs_ts(const gchar *name, const gchar *local_ts)
+{
+	g_return_val_if_fail(name != NULL, NULL);
+
+	SJsonGen *gen = s_json_gen_new();
+	s_json_gen_start_object(gen);
+	s_json_gen_member_string(gen, "n", name);
+	if (local_ts)
+		s_json_gen_member_string(gen, "_MT_LTS", local_ts);
+	s_json_gen_end_object(gen);
+	gc_free gchar *attrs_json = s_json_gen_done(gen);
+
+	return g_strdup_printf("MEGA%s", attrs_json);
+}
+
+// }}}
 // {{{ decode_node_attrs
 
-static gboolean decode_node_attrs(const gchar *attrs, gchar **name)
+static gboolean decode_node_attrs(const gchar *attrs, gchar **name, gchar **local_ts)
 {
 	g_return_val_if_fail(attrs != NULL, FALSE);
 	g_return_val_if_fail(name != NULL, FALSE);
@@ -1291,6 +1309,7 @@ static gboolean decode_node_attrs(const gchar *attrs, gchar **name)
 		return FALSE;
 
 	*name = s_json_get_member_string(attrs + 4, "n");
+	*local_ts = s_json_get_member_string(attrs + 4, "_MT_LTS");
 
 	return TRUE;
 }
@@ -1298,7 +1317,7 @@ static gboolean decode_node_attrs(const gchar *attrs, gchar **name)
 // }}}
 // {{{ decrypt_node_attrs
 
-static gboolean decrypt_node_attrs(const gchar *encrypted_attrs, const guchar *key, gchar **name)
+static gboolean decrypt_node_attrs(const gchar *encrypted_attrs, const guchar *key, gchar **name, gchar **local_ts)
 {
 	g_return_val_if_fail(encrypted_attrs != NULL, FALSE);
 	g_return_val_if_fail(key != NULL, FALSE);
@@ -1306,7 +1325,7 @@ static gboolean decrypt_node_attrs(const gchar *encrypted_attrs, const guchar *k
 
 	gc_free guchar *attrs = b64_aes128_cbc_decrypt(encrypted_attrs, key, NULL);
 
-	return decode_node_attrs(attrs, name);
+	return decode_node_attrs(attrs, name, local_ts);
 }
 
 // }}}
@@ -1974,7 +1993,8 @@ static struct mega_node *mega_node_parse(struct mega_session *s, const gchar *no
 		memcpy(aes_key, node_key, 16);
 
 	gc_free gchar *node_name = NULL;
-	if (!decrypt_node_attrs(node_a, aes_key, &node_name)) {
+	gc_free gchar *node_local_ts = NULL;
+	if (!decrypt_node_attrs(node_a, aes_key, &node_name, &node_local_ts)) {
 		g_printerr("WARNING: Skipping FS node %s because it has malformed attributes\n", node_h);
 		return NULL;
 	}
@@ -1985,7 +2005,7 @@ static struct mega_node *mega_node_parse(struct mega_session *s, const gchar *no
 	}
 
 	// replace invalid filename characters with whitespace
-	gchar *check = node_name;
+	gchar* check = node_name;
 #ifdef G_OS_WIN32
 	while ((check = strpbrk(check, "/\\<>:\"|?*")))
 #else
@@ -2015,6 +2035,13 @@ static struct mega_node *mega_node_parse(struct mega_session *s, const gchar *no
 	n->size = node_s;
 	n->timestamp = node_ts;
 	n->type = node_t;
+	if (node_local_ts) {
+		errno = 0;
+		n->local_ts = strtol(node_local_ts, NULL, 10);
+		if (errno != 0)
+			n->local_ts = 0;
+	} else
+		n->local_ts = 0;
 
 	return n;
 }
@@ -4112,7 +4139,18 @@ try_again:
 	if (s->create_preview)
 		fa = create_preview(s, local_path, aes_key, NULL);
 
-	gc_free gchar *attrs = encode_node_attrs(remote_name);
+	// store local timestamp as attribute
+	guchar local_ts_buf[20];
+	guchar *local_ts = &local_ts_buf[0];
+	GStatBuf fileStat;
+	if (!g_stat(local_path, &fileStat)) {
+		g_snprintf(local_ts, 20, "%lu", fileStat.st_mtime);
+		// g_print("\nFile timestamp is: %s\n", local_ts);
+	} else {
+		local_ts = NULL;
+	}
+
+	gc_free gchar *attrs = encode_node_attrs_ts(remote_name, local_ts);
 	gc_free gchar *attrs_enc = b64_aes128_cbc_encrypt_str(attrs, aes_key);
 
 	guchar node_key[32];
@@ -4614,7 +4652,7 @@ gboolean mega_session_dl_prepare(struct mega_session *s, struct mega_download_da
 				 const gchar *key, GError **err)
 {
 	GError *local_err = NULL;
-	gc_free gchar *node_name = NULL, *dl_node = NULL, *url = NULL, *at = NULL;
+	gc_free gchar *node_name = NULL, *dl_node = NULL, *url = NULL, *at = NULL, *node_local_ts = NULL;
 	gc_free guchar *node_key = NULL;
 
 	g_return_val_if_fail(s != NULL, FALSE);
@@ -4661,7 +4699,7 @@ gboolean mega_session_dl_prepare(struct mega_session *s, struct mega_download_da
 	unpack_node_key(node_key, aes_key, NULL, NULL);
 
 	// decrypt attributes with aes_key
-	if (!decrypt_node_attrs(at, aes_key, &node_name)) {
+	if (!decrypt_node_attrs(at, aes_key, &node_name, &node_local_ts)) {
 		g_set_error(err, MEGA_ERROR, MEGA_ERROR_OTHER, "Invalid key");
 		return FALSE;
 	}
@@ -4901,6 +4939,7 @@ gboolean mega_session_save(struct mega_session *s, GError **err)
 		s_json_gen_member_int(gen, "type", n->type);
 		s_json_gen_member_int(gen, "size", n->size);
 		s_json_gen_member_int(gen, "timestamp", n->timestamp);
+		s_json_gen_member_int(gen, "local_ts", n->local_ts);
 		s_json_gen_member_string(gen, "link", n->link);
 		s_json_gen_end_object(gen);
 	}
@@ -5055,6 +5094,8 @@ gboolean mega_session_load(struct mega_session *s, const gchar *un, const gchar 
 				n->size = s_json_get_int(v, 0);
 			else if (s_json_string_match(k, "timestamp"))
 				n->timestamp = s_json_get_int(v, 0);
+			else if (s_json_string_match(k, "local_ts"))
+				n->local_ts = s_json_get_int(v, 0);
 			else if (s_json_string_match(k, "link"))
 				n->link = s_json_get_string(v);
 			S_JSON_FOREACH_END()

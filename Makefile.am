@@ -1,6 +1,6 @@
 # global flags
 
-COMMANDS = df dl get ls test export mkdir put reg rm copy
+COMMANDS = df dl get ls test export mkdir put reg rm copy sync
 
 ACLOCAL_AMFLAGS = -I m4
 
@@ -45,6 +45,7 @@ megatools_SOURCES = \
 	tools/put.c \
 	tools/reg.c \
 	tools/rm.c \
+	tools/sync.c \
 	tools/copy.c \
 	tools/shell.c \
 	tools/shell.h
