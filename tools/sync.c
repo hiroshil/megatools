@@ -137,7 +137,7 @@ static gboolean up_sync_dir(GFile *root, GFile *file, const gchar *remote_path)
 	GError *local_err = NULL;
 	GFileInfo *i;
 	GSList *remote_children = NULL;
-	GHashTable *hash_table;
+	GHashTable *hash_table = NULL;
 
 	if (root != file) {
 		struct mega_node *node = mega_session_stat(s, remote_path);
@@ -159,7 +159,7 @@ static gboolean up_sync_dir(GFile *root, GFile *file, const gchar *remote_path)
 			}
 		}
 	}
-	
+
 	if (opt_delete) {
 		// get list of remote files
 		remote_children = mega_session_ls(s, remote_path, FALSE);
@@ -224,7 +224,7 @@ static gboolean up_sync_dir(GFile *root, GFile *file, const gchar *remote_path)
 
 				if (!opt_quiet)
 					g_print("R %s\n", node_path);
-					
+
 				if (mega_debug & MEGA_DEBUG_APP)
 					g_print((n->type == MEGA_NODE_FOLDER ? "Deleting remote folder: %s\n" : "Deleting remote file: %s\n"), node_path);
 				if (!opt_dryrun) {
@@ -232,7 +232,7 @@ static gboolean up_sync_dir(GFile *root, GFile *file, const gchar *remote_path)
 						g_printerr("ERROR: Can't remove %s: %s\n", node_path, local_err->message);
 						g_clear_error(&local_err);
 						status = FALSE;
-					}				
+					}
 				}
 			} else {
 				g_print("Error, no node found for file name: %s\n", (char *)i->data);
@@ -360,13 +360,15 @@ static gboolean delete_recursively(GFile *file, GError **error)
 
 	if (!g_file_delete(file, NULL, error))
 		return FALSE;
+
+	return TRUE;
 }
 
 static gboolean dl_sync_dir(struct mega_node *node, GFile *file, const gchar *remote_path)
 {
 	GError *local_err = NULL;
 	GFileInfo *fi;
-	GHashTable *hash_table;
+	GHashTable *hash_table = NULL;
 
 	gc_free gchar *local_path = g_file_get_path(file);
 
@@ -493,7 +495,7 @@ static int sync_main(int ac, char *av[])
 		g_printerr("ERROR: You must specify local and remote paths\n");
 		goto err;
 	}
-	
+
 	if (opt_quiet) {
 		opt_noprogress = TRUE;
 		mega_debug = 0;
