@@ -103,7 +103,7 @@ int main(int ac, char *av[])
 
 	if (l && opt_long && opt_header && !opt_export) {
 		g_print("===================================================================================\n");
-		g_print("%-11s %-11s %-1s %13s %-19s %s\n", "Handle", "Owner", "T", "Size", "Mod. Date",
+		g_print("%-11s %-11s %-1s %13s %-19s %-19s %s\n", "Handle", "Owner", "T", "Size", "Mod. Date", "Local File Date",
 			opt_names ? "Filename" : "Path");
 		g_print("===================================================================================\n");
 	}
@@ -120,6 +120,13 @@ int main(int ac, char *av[])
 			gc_free gchar *time_str = g_date_time_format(dt, "%Y-%m-%d %H:%M:%S");
 			g_date_time_unref(dt);
 
+			gc_free gchar *ltime_str = NULL;
+			if (n->local_ts > 0) {
+				GDateTime *ldt = g_date_time_new_from_unix_local(n->local_ts);
+				ltime_str = g_date_time_format(ldt, "%Y-%m-%d %H:%M:%S");
+				g_date_time_unref(ldt);
+			}
+
 			gc_free gchar *size_str = NULL;
 			if (opt_human)
 				size_str = n->size > 0 ? g_format_size_full(n->size, G_FORMAT_SIZE_IEC_UNITS) :
@@ -127,8 +134,8 @@ int main(int ac, char *av[])
 			else
 				size_str = n->size > 0 ? g_strdup_printf("%" G_GUINT64_FORMAT, n->size) : g_strdup("-");
 
-			g_print("%-11s %-11s %d %13s %19s %s\n", n->handle, n->user_handle ? n->user_handle : "",
-				n->type, size_str, n->timestamp > 0 ? time_str : "", opt_names ? n->name : node_path);
+			g_print("%-11s %-11s %d %13s %19s %19s %s\n", n->handle, n->user_handle ? n->user_handle : "",
+				n->type, size_str, n->timestamp > 0 ? time_str : "", ltime_str != NULL ? ltime_str : "", opt_names ? n->name : node_path);
 		} else {
 			g_print("%s", opt_names ? n->name : node_path);
 			if (opt_print0)
