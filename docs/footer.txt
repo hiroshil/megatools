@@ -10,7 +10,8 @@ man:megatools-mkdir[1],
 man:megatools-put[1],
 man:megatools-reg[1],
 man:megatools-rm[1],
-man:megatools-copy[1].
+man:megatools-copy[1],
+man:megatools-sync[1].
 
 
 MEGATOOLS

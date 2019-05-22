@@ -33,6 +33,7 @@ extern struct shell_tool shell_tool_rm;
 extern struct shell_tool shell_tool_copy;
 extern struct shell_tool shell_tool_test;
 extern struct shell_tool shell_tool_export;
+extern struct shell_tool shell_tool_sync;
 
 static struct shell_tool* tools[] = {
 	&shell_tool_dl,
@@ -46,6 +47,7 @@ static struct shell_tool* tools[] = {
 	&shell_tool_mkdir,
 	&shell_tool_rm,
 	&shell_tool_reg,
+	&shell_tool_sync,
 };
 
 int main(int ac, char *av[])
