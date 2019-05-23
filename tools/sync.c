@@ -549,8 +549,8 @@ const struct shell_tool shell_tool_sync = {
 	.name = "sync",
 	.main = sync_main,
 	.usages = (char*[]){
-		"[-n] [--no-progress] --local <path> --remote <remotepath>",
-		"[-n] [--no-progress] --download --local <path> --remote <remotepath>",
+		"[-q] [-n] [--no-progress] [--delete] --local <path> --remote <remotepath>",
+		"[-q] [-n] [--no-progress] [--delete] --download --local <path> --remote <remotepath>",
 		NULL
 	},
 };
