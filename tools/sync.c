@@ -1,5 +1,6 @@
 /*
  *  megatools - Mega.nz client library and tools
+ *  Copyright (C) 2019 Leo Meyer <leichtenfels@protonmail.ch>
  *  Copyright (C) 2013  Ondřej Jirman <megous@megous.com>
  *  sync.c - synchronize a local folder with a remote mega.nz folder
  *
