@@ -30,8 +30,8 @@ static gboolean opt_delete;
 static gboolean opt_download;
 static gboolean opt_noprogress;
 static gboolean opt_dryrun;
-static gboolean opt_nofollow;
 static gboolean opt_quiet;
+static gboolean opt_force;
 static struct mega_session *s;
 
 static GOptionEntry entries[] = {
@@ -40,9 +40,9 @@ static GOptionEntry entries[] = {
 	{ "delete", '\0', 0, G_OPTION_ARG_NONE, &opt_delete, "Delete missing files on target", NULL },
 	{ "download", 'd', 0, G_OPTION_ARG_NONE, &opt_download, "Download files from mega", NULL },
 	{ "no-progress", '\0', 0, G_OPTION_ARG_NONE, &opt_noprogress, "Disable progress bar", NULL },
-	{ "no-follow", '\0', 0, G_OPTION_ARG_NONE, &opt_nofollow, "Don't follow symbolic links", NULL },
 	{ "dryrun", 'n', 0, G_OPTION_ARG_NONE, &opt_dryrun, "Don't perform any actual changes", NULL },
 	{ "quiet", 'q', 0, G_OPTION_ARG_NONE, &opt_quiet, "Output warnings and errors only", NULL },
+	{ "force", '\0', 0, G_OPTION_ARG_NONE, &opt_force, "Overwrite directories on target with files", NULL },
 	{ NULL }
 };
 
@@ -59,39 +59,56 @@ static void status_callback(struct mega_status_data *data, gpointer userdata)
 static gboolean up_sync_file(GFile *root, GFile *file, const gchar *remote_path)
 {
 	GError *local_err = NULL;
+  gc_free gchar* local_path = g_file_get_path(file);
+
+	GStatBuf fileStat;
+	if (g_stat(local_path, &fileStat)) {
+		g_printerr("ERROR: Unable to stat %s\n", local_path);
+		return FALSE;
+	}
+
+  if (fileStat.st_size <= 0) {
+		if (mega_debug & MEGA_DEBUG_APP) {
+			g_print("Ignoring empty file %s\n", local_path);
+		}
+		return FALSE;
+  }
 
 	struct mega_node *node = mega_session_stat(s, remote_path);
 	if (node) {
+    // check whether the node represents a directory
+ 		if (!opt_force && node->type == MEGA_NODE_FOLDER) {
+			g_printerr("ERROR: Target is a directory, cannot overwrite (use --force): %s\n", remote_path);
+			return FALSE;
+		}
+
+    // if the local timestamp is not available, fall back to the upload timestamp
+    glong timestamp = node->local_ts > 0 ? node->local_ts : node->timestamp;
+
 		gboolean doUpload = FALSE;
 
-		GStatBuf fileStat;
-		if (!g_stat(g_file_get_path(file), &fileStat)) {
-			// size check
-			if (node->size != fileStat.st_size) {
-				doUpload = TRUE;
-				if (mega_debug & MEGA_DEBUG_APP)
-					g_print("File %s: sizes differ\n", remote_path);
-			}
+		// size check
+		if (node->size != fileStat.st_size) {
+			doUpload = TRUE;
+			if (mega_debug & MEGA_DEBUG_APP)
+				g_print("File %s: sizes differ\n", remote_path);
+		}
 
-			// timestamp check
-			if (!doUpload) {
-				if (fileStat.st_mtime != node->local_ts) {
-					doUpload = TRUE;
-					// get local file timestamp
-					if (mega_debug & MEGA_DEBUG_APP) {
-						guchar local_ts_buf[20];
-						g_snprintf(&local_ts_buf[0], 20, "%lu", fileStat.st_mtime);
-						guchar remote_ts_buf[20];
-						g_snprintf(&remote_ts_buf[0], 20, "%lu", node->local_ts);
-						g_print("File %s: timestamp mismatch\n", remote_path);
-						g_print("  Local file timestamp is: %s\n", &local_ts_buf[0]);
-						g_print("  Remote timestamp is: %s\n", &remote_ts_buf[0]);
-					}
+		// timestamp check
+		if (!doUpload) {
+			if (fileStat.st_mtime != timestamp) {
+				doUpload = TRUE;
+				// get local file timestamp
+				if (mega_debug & MEGA_DEBUG_APP) {
+					guchar local_ts_buf[20];
+					g_snprintf(&local_ts_buf[0], 20, "%lu", fileStat.st_mtime);
+					guchar remote_ts_buf[20];
+					g_snprintf(&remote_ts_buf[0], 20, "%lu", timestamp);
+					g_print("File %s: timestamp mismatch\n", remote_path);
+					g_print("  Local file timestamp is: %s\n", &local_ts_buf[0]);
+					g_print("  Remote timestamp is: %s\n", &remote_ts_buf[0]);
 				}
 			}
-		} else {
-			g_printerr("ERROR: Unable to stat %s\n", g_file_get_path(file));
-			return FALSE;
 		}
 
 		if (!doUpload) {
@@ -100,6 +117,9 @@ static gboolean up_sync_file(GFile *root, GFile *file, const gchar *remote_path)
 			}
 			return FALSE;
 		}
+
+    if (!opt_quiet)
+	    g_print("R %s\n", remote_path);
 
 		if (!opt_dryrun) {
 			if (!mega_session_rm(s, remote_path, &local_err)) {
@@ -115,7 +135,6 @@ static gboolean up_sync_file(GFile *root, GFile *file, const gchar *remote_path)
 	if (!opt_dryrun) {
 		g_free(cur_file);
 		cur_file = g_file_get_basename(file);
-		gc_free gchar* local_path = g_file_get_path(file);
 
 		if (!mega_session_put_compat(s, remote_path, local_path, &local_err)) {
 			if (!opt_noprogress && tool_is_stdout_tty())
@@ -142,13 +161,22 @@ static gboolean up_sync_dir(GFile *root, GFile *file, const gchar *remote_path)
 
 	if (root != file) {
 		struct mega_node *node = mega_session_stat(s, remote_path);
+    // if the remote node is a file, it is deleted and replaced by the directory
 		if (node && node->type == MEGA_NODE_FILE) {
-			g_printerr("ERROR: File already exists at %s\n", remote_path);
-			return FALSE;
+      if (!opt_quiet)
+        g_print("R %s\n", remote_path);
+
+      if (!opt_dryrun) {
+			  if (!mega_session_rm(s, remote_path, &local_err)) {
+				  g_printerr("ERROR: Can't remove %s: %s\n", remote_path, local_err->message);
+				  return FALSE;
+			  }
+		  }
 		}
 
 		if (!node) {
-			g_print("D %s\n", remote_path);
+      if (!opt_quiet)
+        g_print("D %s\n", remote_path);
 
 			if (!opt_dryrun) {
 				if (!mega_session_mkdir(s, remote_path, &local_err)) {
@@ -178,7 +206,7 @@ static gboolean up_sync_dir(GFile *root, GFile *file, const gchar *remote_path)
 	// sync children
 	gc_object_unref GFileEnumerator *e =
 		g_file_enumerate_children(file, "standard::*",
-					  opt_nofollow ? G_FILE_QUERY_INFO_NOFOLLOW_SYMLINKS : G_FILE_QUERY_INFO_NONE,
+					  G_FILE_QUERY_INFO_NONE,
 					  NULL, &local_err);
 	if (!e) {
 		g_printerr("ERROR: Can't read local directory %s: %s\n", g_file_get_relative_path(root, file),
@@ -226,8 +254,6 @@ static gboolean up_sync_dir(GFile *root, GFile *file, const gchar *remote_path)
 				if (!opt_quiet)
 					g_print("R %s\n", node_path);
 
-				if (mega_debug & MEGA_DEBUG_APP)
-					g_print((n->type == MEGA_NODE_FOLDER ? "Deleting remote folder: %s\n" : "Deleting remote file: %s\n"), node_path);
 				if (!opt_dryrun) {
 					if (!mega_session_rm(s, node_path, &local_err)) {
 						g_printerr("ERROR: Can't remove %s: %s\n", node_path, local_err->message);
@@ -248,99 +274,15 @@ static gboolean up_sync_dir(GFile *root, GFile *file, const gchar *remote_path)
 	return status;
 }
 
-
-// download operation
-
-static gboolean dl_sync_file(struct mega_node *node, GFile *file, const gchar *remote_path)
-{
-	GError *local_err = NULL;
-	gchar *local_path = g_file_get_path(file);
-
-	if (g_file_query_exists(file, NULL)) {
-		gboolean doDownload = FALSE;
-
-		GStatBuf fileStat;
-		if (!g_stat(g_file_get_path(file), &fileStat)) {
-			// size check
-			if (node->size != fileStat.st_size) {
-				doDownload = TRUE;
-				if (mega_debug & MEGA_DEBUG_APP)
-					g_print("File %s: sizes differ\n", remote_path);
-			}
-
-			// timestamp check
-			if (!doDownload) {
-				if (fileStat.st_mtime != node->local_ts) {
-					doDownload = TRUE;
-					// get local file timestamp
-					if (mega_debug & MEGA_DEBUG_APP) {
-						guchar local_ts_buf[20];
-						g_snprintf(&local_ts_buf[0], 20, "%lu", fileStat.st_mtime);
-						guchar remote_ts_buf[20];
-						g_snprintf(&remote_ts_buf[0], 20, "%lu", node->local_ts);
-						g_print("File %s: timestamp mismatch\n", remote_path);
-						g_print("  Local file timestamp is: %s\n", &local_ts_buf[0]);
-						g_print("  Remote timestamp is: %s\n", &remote_ts_buf[0]);
-					}
-				}
-			}
-		} else {
-			g_printerr("ERROR: Unable to stat %s\n", g_file_get_path(file));
-			return FALSE;
-		}
-
-		if (!doDownload) {
-			if (mega_debug & MEGA_DEBUG_APP) {
-				g_print("File %s appears identical, skipping\n", remote_path);
-			}
-			return FALSE;
-		}
-
-		if (!opt_dryrun) {
-			if (!g_file_delete(file, NULL, &local_err)) {
-				g_printerr("ERROR: Can't remove %s: %s\n", g_file_get_path(file), local_err->message);
-				return FALSE;
-			}
-		}
-	}
-
-	if (!opt_quiet)
-		g_print("F %s\n", local_path);
-
-	if (!opt_dryrun) {
-		g_free(cur_file);
-		cur_file = g_file_get_basename(file);
-
-		if (!mega_session_get_compat(s, g_file_get_path(file), remote_path, &local_err)) {
-			if (!opt_noprogress && tool_is_stdout_tty())
-				g_print("\r" ESC_CLREOL);
-
-			g_printerr("ERROR: Download failed for %s: %s\n", remote_path, local_err->message);
-			g_clear_error(&local_err);
-			return FALSE;
-		}
-
-		if (node->local_ts > 0) {
-			struct utimbuf timbuf;
-			timbuf.actime = node->local_ts;
-			timbuf.modtime = node->local_ts;
-			if (utime(g_file_get_path(file), &timbuf)) {
-				g_printerr("ERROR: Failed to set file times on %s\n", g_file_get_path(file));
-			}
-		}
-
-		if (!opt_noprogress && tool_is_stdout_tty())
-			g_print("\r" ESC_CLREOL);
-	}
-
-	return TRUE;
-}
-
+// helper function: delete a local directory recursively
 static gboolean delete_recursively(GFile *file, GError **error)
 {
 	gc_object_unref GFileEnumerator *e = g_file_enumerate_children(file, "standard::*",
 						G_FILE_QUERY_INFO_NONE,
 						NULL, error);
+  if (!e)
+    return FALSE;
+
 	GFileInfo *fi;
 	while ((fi = g_file_enumerator_next_file(e, NULL, NULL))) {
 		GFileType type = g_file_info_get_file_type(fi);
@@ -365,6 +307,120 @@ static gboolean delete_recursively(GFile *file, GError **error)
 	return TRUE;
 }
 
+// download operation
+
+static gboolean dl_sync_file(struct mega_node *node, GFile *file, const gchar *remote_path)
+{
+	GError *local_err = NULL;
+	gchar *local_path = g_file_get_path(file);
+  // if the local timestamp is not available, fall back to the upload timestamp
+  glong timestamp = node->local_ts > 0 ? node->local_ts : node->timestamp;
+
+	if (g_file_query_exists(file, NULL)) {
+    GFileType file_type = g_file_query_file_type(file, G_FILE_QUERY_INFO_NONE, NULL);
+
+    // check whether the file is a directory
+	  if (!opt_force && file_type == G_FILE_TYPE_DIRECTORY) {
+			g_printerr("ERROR: Target is a directory, cannot overwrite (use --force): %s\n", remote_path);
+			return FALSE;
+		}
+
+    // check special file types
+	  if (file_type != G_FILE_TYPE_DIRECTORY && file_type != G_FILE_TYPE_REGULAR) {
+			g_printerr("ERROR: Target is not a regular file, cannot overwrite: %s\n", remote_path);
+			return FALSE;
+		}
+
+		gboolean doDownload = FALSE;
+
+		GStatBuf fileStat;
+		if (!g_stat(g_file_get_path(file), &fileStat)) {
+			// size check
+			if (node->size != fileStat.st_size) {
+				doDownload = TRUE;
+				if (mega_debug & MEGA_DEBUG_APP)
+					g_print("File %s: sizes differ\n", remote_path);
+			}
+
+			// timestamp check
+			if (!doDownload) {
+				if (fileStat.st_mtime != timestamp) {
+					doDownload = TRUE;
+					// get local file timestamp
+					if (mega_debug & MEGA_DEBUG_APP) {
+						guchar local_ts_buf[20];
+						g_snprintf(&local_ts_buf[0], 20, "%lu", fileStat.st_mtime);
+						guchar remote_ts_buf[20];
+						g_snprintf(&remote_ts_buf[0], 20, "%lu", timestamp);
+						g_print("File %s: timestamp mismatch\n", remote_path);
+						g_print("  Local file timestamp is: %s\n", &local_ts_buf[0]);
+						g_print("  Remote timestamp is: %s\n", &remote_ts_buf[0]);
+					}
+				}
+			}
+		} else {
+			g_printerr("ERROR: Unable to stat %s\n", g_file_get_path(file));
+			return FALSE;
+		}
+
+		if (!doDownload) {
+			if (mega_debug & MEGA_DEBUG_APP) {
+				g_print("File %s appears identical, skipping\n", remote_path);
+			}
+			return FALSE;
+		}
+
+    if (!opt_quiet)
+      g_print("R %s\n", g_file_get_path(file));
+
+		if (!opt_dryrun) {
+	    if (file_type == G_FILE_TYPE_DIRECTORY) {
+        if (!delete_recursively(file, &local_err)) {
+				  g_printerr("ERROR: Can't remove %s: %s\n", g_file_get_path(file), local_err->message);
+				  return FALSE;
+        }
+      } else {
+			  if (!g_file_delete(file, NULL, &local_err)) {
+				  g_printerr("ERROR: Can't delete %s: %s\n", g_file_get_path(file), local_err->message);
+				  return FALSE;
+			  }
+      }
+		}
+	}
+
+	if (!opt_quiet)
+		g_print("F %s\n", local_path);
+
+	if (!opt_dryrun) {
+		g_free(cur_file);
+		cur_file = g_file_get_basename(file);
+
+		if (!mega_session_get_compat(s, g_file_get_path(file), remote_path, &local_err)) {
+			if (!opt_noprogress && tool_is_stdout_tty())
+				g_print("\r" ESC_CLREOL);
+
+			g_printerr("ERROR: Download failed for %s: %s\n", remote_path, local_err->message);
+			g_clear_error(&local_err);
+			return FALSE;
+		}
+
+		if (timestamp > 0) {
+			struct utimbuf timbuf;
+			timbuf.actime = timestamp;
+			timbuf.modtime = timestamp;
+			if (utime(g_file_get_path(file), &timbuf)) {
+				g_printerr("ERROR: Failed to set file times on %s\n", g_file_get_path(file));
+			}
+		}
+
+		if (!opt_noprogress && tool_is_stdout_tty())
+			g_print("\r" ESC_CLREOL);
+	}
+
+	return TRUE;
+}
+
+
 static gboolean dl_sync_dir(struct mega_node *node, GFile *file, const gchar *remote_path)
 {
 	GError *local_err = NULL;
@@ -373,24 +429,42 @@ static gboolean dl_sync_dir(struct mega_node *node, GFile *file, const gchar *re
 
 	gc_free gchar *local_path = g_file_get_path(file);
 
-	if (!g_file_query_exists(file, NULL)) {
-		if (!opt_quiet)
-			g_print("D %s\n", local_path);
+  GFileType file_type = g_file_query_file_type(file, 0, NULL);
 
-		if (!opt_dryrun) {
-			if (!g_file_make_directory(file, NULL, &local_err)) {
-				g_printerr("ERROR: Can't create local directory %s: %s\n", local_path,
-					   local_err->message);
-				g_clear_error(&local_err);
-				return FALSE;
-			}
-		}
-	} else {
-		if (g_file_query_file_type(file, 0, NULL) != G_FILE_TYPE_DIRECTORY) {
-			g_printerr("ERROR: Can't create local directory %s: file exists\n", local_path);
-			return FALSE;
-		}
-	}
+  // does the file exist?
+  if (file_type != G_FILE_TYPE_UNKNOWN) {
+    // regular file that needs to be replaced by a directory?
+    if (file_type == G_FILE_TYPE_REGULAR) {
+printf("Regular file\n");
+      if (!opt_quiet)
+        g_print("R %s\n", local_path);
+
+  		if (!opt_dryrun) {
+		    if (!g_file_delete(file, NULL, &local_err)) {
+			    g_printerr("ERROR: Can't delete %s: %s\n", g_file_get_path(file), local_err->message);
+			    return FALSE;
+		    }
+      }
+    } else if (file_type != G_FILE_TYPE_DIRECTORY) {
+	    g_printerr("ERROR: Target is not a directory, cannot write here: %s\n", local_path);
+	    return FALSE;
+    }
+  }
+
+  if (!g_file_query_exists(file, NULL)) {
+    // file does not exist, create the directory
+	  if (!opt_quiet)
+		  g_print("D %s\n", local_path);
+
+	  if (!opt_dryrun) {
+		  if (!g_file_make_directory(file, NULL, &local_err)) {
+			  g_printerr("ERROR: Can't create local directory %s: %s\n", local_path,
+				     local_err->message);
+			  g_clear_error(&local_err);
+			  return FALSE;
+		  }
+	  }
+  }
 
 	if (opt_delete) {
 		// get list of local children
@@ -550,8 +624,8 @@ const struct shell_tool shell_tool_sync = {
 	.name = "sync",
 	.main = sync_main,
 	.usages = (char*[]){
-		"[-q] [-n] [--no-progress] [--delete] --local <path> --remote <remotepath>",
-		"[-q] [-n] [--no-progress] [--delete] --download --local <path> --remote <remotepath>",
+		"[-n] [-q] [--force] [--no-progress] [--delete] --local <path> --remote <remotepath>",
+		"[-n] [-q] [--force] [--no-progress] [--delete] --download --local <path> --remote <remotepath>",
 		NULL
 	},
 };
