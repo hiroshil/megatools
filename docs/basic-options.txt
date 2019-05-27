@@ -6,6 +6,10 @@ include::network-options.txt[]
 --ignore-config-file::
 	Disable loading .megarc
 
+-q::
+--quiet::
+	Limit tool console output to errors and warnings.
+
 --debug [<options>]::
 	Enable debugging of various aspects of the megatools 
 	operation. You may enable multiple debugging options 

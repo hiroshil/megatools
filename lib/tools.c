@@ -62,8 +62,10 @@ static gboolean opt_enable_previews = BOOLEAN_UNSET_BUT_TRUE;
 static gboolean opt_disable_resume;
 static gchar *opt_netif;
 static gchar *opt_ipproto;
+static gboolean opt_quiet;
 
 static gboolean tool_use_colors = FALSE;
+static int tool_print_level = 2; // 0=err 1=warn 2=info 3=debug
 
 static gboolean opt_debug_callback(const gchar *option_name, const gchar *value, gpointer data, GError **error)
 {
@@ -106,6 +108,9 @@ static GOptionEntry basic_options[] = {
 	{ "debug", '\0',
                 G_OPTION_FLAG_OPTIONAL_ARG, G_OPTION_ARG_CALLBACK, opt_debug_callback,
                 "Enable debugging output", "OPTS" },
+	{ "quiet", 'q',
+		0, G_OPTION_ARG_NONE, &opt_quiet,
+		"Output warnings and errors only", NULL },
 	{ "version", '\0',
                 0, G_OPTION_ARG_NONE, &opt_version,
                 "Show version information", NULL },
@@ -265,6 +270,28 @@ gboolean tool_is_stdout_tty(void)
 #else
 	return isatty(1);
 #endif
+}
+
+void tool_print(int level, const char* format, ...)
+{
+	va_list args;
+	gc_free gchar *string = NULL;
+
+	if (level > tool_print_level)
+		return;
+
+	g_return_if_fail(format != NULL);
+
+	va_start(args, format);
+	string = g_strdup_vprintf(format, args);
+	va_end(args);
+
+	if (level == 0)
+		g_printerr("ERROR: %s", string);
+	else if (level == 1)
+		g_printerr("WARNING: %s", string);
+	else
+		g_print("%s", string);
 }
 
 #define PROGRESS_FREQUENCY ((gint64)1000000)
@@ -495,6 +522,11 @@ void tool_init(gint *ac, gchar ***av, const gchar *tool_name, GOptionEntry *tool
 		g_clear_error(&local_err);
 		exit(1);
 	}
+
+	if (mega_debug & MEGA_DEBUG_APP)
+		tool_print_level = 3;
+	if (opt_quiet)
+		tool_print_level = 1;
 
 	print_version();
 

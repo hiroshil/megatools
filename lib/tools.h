@@ -50,6 +50,14 @@ gchar *tool_convert_filename(const gchar *path, gboolean local);
 gboolean tool_is_stdout_tty(void);
 gchar* tool_prompt_input(void);
 
+void tool_print(int level, const char* format, ...)
+	__attribute__((format (printf, 2, 3)));
+
+#define tool_print_err(args...) tool_print(0, args)
+#define tool_print_warn(args...) tool_print(1, args)
+#define tool_print_info(args...) tool_print(2, args)
+#define tool_print_debug(args...) tool_print(3, args)
+
 #define ESC_CLREOL "\x1b[0K"
 #define ESC_WHITE "\x1b[37;1m"
 #define ESC_GREEN "\x1b[32;1m"
