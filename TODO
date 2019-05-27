@@ -1,5 +1,6 @@
-- cleanup docs for megatools sync command
-  - for now it's just a copy of megatools copy man page
+- sync
+  - review
+  - mega.c: move local_ts parsing/formatting to decode_attrs/encode_attrs
 
 - bug: when the session is started by megatools dl, it will have an
   empty fs_nodes list, so next call to megatools ls will return empty
