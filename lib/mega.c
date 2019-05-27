@@ -4140,15 +4140,10 @@ try_again:
 		fa = create_preview(s, local_path, aes_key, NULL);
 
 	// store local timestamp as attribute
-	guchar local_ts_buf[20];
-	guchar *local_ts = &local_ts_buf[0];
-	GStatBuf fileStat;
-	if (!g_stat(local_path, &fileStat)) {
-		g_snprintf(local_ts, 20, "%lu", fileStat.st_mtime);
-		// g_print("\nFile timestamp is: %s\n", local_ts);
-	} else {
-		local_ts = NULL;
-	}
+	GStatBuf st;
+	gc_free gchar *local_ts = NULL;
+	if (!g_stat(local_path, &st))
+		local_ts = g_strdup_printf("%lu", st.st_mtime);
 
 	gc_free gchar *attrs = encode_node_attrs_ts(remote_name, local_ts);
 	gc_free gchar *attrs_enc = b64_aes128_cbc_encrypt_str(attrs, aes_key);
