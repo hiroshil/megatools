@@ -16,30 +16,50 @@ SYNOPSIS
 DESCRIPTION
 -----------
 
-Synchronizes remote and local directories. Files are overwritten if their size or modification time is different.
-Directories are only overwritten by files if the `--force` option is specified. Use this option with caution. Files are always overwritten by a directory with the same name.
+Synchronizes remote and local directories. Files are overwritten if their size
+or modification time is different.
 
-Default direction is to upload files to the cloud. If you want to download files, you have to add `--download` option.
+Directories are only overwritten by files if the `--force` option is specified.
+Use this option with caution. Files are always overwritten by a directory with
+the same name.
 
-Empty folders on Mega are not downloaded. Local symbolic links will not be followed during upload. Files with a length of 0 bytes are not uploaded because Mega doesn't support them.
+Default direction is to upload files to the cloud. If you want to download
+files, you have to add `--download` option.
 
-If you make modifications on Mega it is possible that the local megatools cache does not immediately reflect the changes. To make sure that you always operate on the current set of files use the `--reload` option.
+Empty folders on Mega are not downloaded. Local symbolic links will not be
+followed during upload. Files with a length of 0 bytes are not uploaded because
+Mega doesn't support them.
+
+If you make modifications on Mega it is possible that the local megatools cache
+does not immediately reflect the changes. To make sure that you always operate
+on the current set of files use the `--reload` option.
 
 The option `--debug=app` displays info about file comparisons.
 
 Details:
 
-When uploading a file with 'sync', 'put' or 'copy' a custom attribute "_MT_LTS" is used to store the local modification timestamp of the file on Mega. The format is a unix timestamp (seconds since 1970/1/1 UTC). Directories are not timestamped.
+When uploading a file with 'sync', 'put' or 'copy' a custom attribute "_MT_LTS"
+is used to store the local modification timestamp of the file on Mega. The
+format is a unix timestamp (seconds since 1970/1/1 UTC). Directories are not
+timestamped.
 
-If an existing file is to be uploaded 'sync' compares the file sizes of the local and remote versions. If they are the same the timestamp is compared. If there are differences the file is transferred.
+If an existing file is to be uploaded 'sync' compares the file sizes of the
+local and remote versions. If they are the same the timestamp is compared. If
+there are differences the file is transferred.
 
-If the local timestamp on Mega is missing, for example when a file has been uploaded using software other than megatools, 'sync' will use the upload timestamp for the comparison.
-This makes sure that files that have been uploaded to Mega using other software will
-not be synchronized more than once.
+If the local timestamp on Mega is missing, for example when a file has been
+uploaded using software other than megatools, 'sync' will use the upload
+timestamp for the comparison. This makes sure that files that have been uploaded
+to Mega using other software will not be synchronized more than once.
 
-When a file is downloaded 'sync' will set its modification date on the local file system to the timestamp obtained from Mega. The 'copy' and 'get' tools will not set this timestamp. If you want to synchronize in both directions it is therefore best to use 'sync' exclusively.
+When a file is downloaded 'sync' will set its modification date on the local
+file system to the timestamp obtained from Mega. The 'copy' and 'get' tools will
+not set this timestamp. If you want to synchronize in both directions it is
+therefore best to use 'sync' exclusively.
 
-Please note that copying a file using the Mega web application will also copy the local timestamp if available. When downloading this file with 'sync' the file modification time will be the same as the original file's.
+Please note that copying a file using the Mega web application will also copy
+the local timestamp if available. When downloading this file with 'sync' the
+file modification time will be the same as the original file's.
 
 
 OPTIONS
@@ -70,13 +90,15 @@ OPTIONS
 	This option implies --no-progress and disables debug messages.
 
 --delete::
-	Delete files and folders in a target directory that are not present in the source directory.
+	Delete files and folders in a target directory that are not present in
+	the source directory.
 
 --force::
-	Overwrites folders in a target directory if the source is a regular file.
-	If this option is not specified 'sync' will output an error for the target folder.
-	Files that are to be replaced by a folder are always removed before the folder
-	is being synchronized. Use this option with caution.
+	Overwrites folders in a target directory if the source is a regular
+	file. If this option is not specified 'sync' will output an error for
+	the target folder. Files that are to be replaced by a folder are always
+	removed before the folder is being synchronized. Use this option with
+	caution.
 
 include::upload-options.txt[]
 include::download-options.txt[]

@@ -20,6 +20,8 @@ SYNOPSIS
 'megatools get' --path - <remotefile>
 'megatools copy' [-n] [--no-progress] --local <path> --remote <remotepath>
 'megatools copy' [-n] [--no-progress] --download --local <path> --remote <remotepath>
+'megatools sync' [-n] [-q] [--force] [--delete] [--no-progress] --local <path> --remote <remotepath>
+'megatools sync' [-n] [-q] [--force] [--delete] [--no-progress] --download --local <path> --remote <remotepath>
 'megatools rm' <remotepaths>...
 'megatools rm' /Contacts/<contactemail>
 'megatools dl' [--no-progress] [--path <path>] <links>...
@@ -85,6 +87,9 @@ man:megatools-dl[1]::
 
 man:megatools-copy[1]::
 	Upload or download a directory tree
+
+man:megatools-sync[1]::
+	Synchronize a local folder with a remote mega.nz folder
 
 
 CONFIGURATION FILES

@@ -38,6 +38,7 @@ Tools
   dl       Download file from a "public" Mega link
            (doesn't require login)
   copy     Upload or download a directory tree
+  sync     Synchronize a local folder with a remote mega.nz folder
 
 
 All of these tools do:
