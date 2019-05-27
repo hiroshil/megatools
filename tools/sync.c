@@ -59,7 +59,7 @@ static void status_callback(struct mega_status_data *data, gpointer userdata)
 static gboolean up_sync_file(GFile *root, GFile *file, const gchar *remote_path)
 {
 	GError *local_err = NULL;
-  gc_free gchar* local_path = g_file_get_path(file);
+	gc_free gchar *local_path = g_file_get_path(file);
 
 	GStatBuf fileStat;
 	if (g_stat(local_path, &fileStat)) {
@@ -67,23 +67,23 @@ static gboolean up_sync_file(GFile *root, GFile *file, const gchar *remote_path)
 		return FALSE;
 	}
 
-  if (fileStat.st_size <= 0) {
+	if (fileStat.st_size <= 0) {
 		if (mega_debug & MEGA_DEBUG_APP) {
 			g_print("Ignoring empty file %s\n", local_path);
 		}
 		return FALSE;
-  }
+	}
 
 	struct mega_node *node = mega_session_stat(s, remote_path);
 	if (node) {
-    // check whether the node represents a directory
- 		if (!opt_force && node->type == MEGA_NODE_FOLDER) {
+		// check whether the node represents a directory
+		if (!opt_force && node->type == MEGA_NODE_FOLDER) {
 			g_printerr("ERROR: Target is a directory, cannot overwrite (use --force): %s\n", remote_path);
 			return FALSE;
 		}
 
-    // if the local timestamp is not available, fall back to the upload timestamp
-    glong timestamp = node->local_ts > 0 ? node->local_ts : node->timestamp;
+		// if the local timestamp is not available, fall back to the upload timestamp
+		glong timestamp = node->local_ts > 0 ? node->local_ts : node->timestamp;
 
 		gboolean doUpload = FALSE;
 
@@ -118,8 +118,8 @@ static gboolean up_sync_file(GFile *root, GFile *file, const gchar *remote_path)
 			return FALSE;
 		}
 
-    if (!opt_quiet)
-	    g_print("R %s\n", remote_path);
+		if (!opt_quiet)
+			g_print("R %s\n", remote_path);
 
 		if (!opt_dryrun) {
 			if (!mega_session_rm(s, remote_path, &local_err)) {
@@ -161,22 +161,22 @@ static gboolean up_sync_dir(GFile *root, GFile *file, const gchar *remote_path)
 
 	if (root != file) {
 		struct mega_node *node = mega_session_stat(s, remote_path);
-    // if the remote node is a file, it is deleted and replaced by the directory
+		// if the remote node is a file, it is deleted and replaced by the directory
 		if (node && node->type == MEGA_NODE_FILE) {
-      if (!opt_quiet)
-        g_print("R %s\n", remote_path);
+			if (!opt_quiet)
+				g_print("R %s\n", remote_path);
 
-      if (!opt_dryrun) {
-			  if (!mega_session_rm(s, remote_path, &local_err)) {
-				  g_printerr("ERROR: Can't remove %s: %s\n", remote_path, local_err->message);
-				  return FALSE;
-			  }
-		  }
+			if (!opt_dryrun) {
+				if (!mega_session_rm(s, remote_path, &local_err)) {
+					g_printerr("ERROR: Can't remove %s: %s\n", remote_path, local_err->message);
+					return FALSE;
+				}
+			}
 		}
 
 		if (!node) {
-      if (!opt_quiet)
-        g_print("D %s\n", remote_path);
+			if (!opt_quiet)
+				g_print("D %s\n", remote_path);
 
 			if (!opt_dryrun) {
 				if (!mega_session_mkdir(s, remote_path, &local_err)) {
@@ -205,9 +205,7 @@ static gboolean up_sync_dir(GFile *root, GFile *file, const gchar *remote_path)
 
 	// sync children
 	gc_object_unref GFileEnumerator *e =
-		g_file_enumerate_children(file, "standard::*",
-					  G_FILE_QUERY_INFO_NONE,
-					  NULL, &local_err);
+		g_file_enumerate_children(file, "standard::*", G_FILE_QUERY_INFO_NONE, NULL, &local_err);
 	if (!e) {
 		g_printerr("ERROR: Can't read local directory %s: %s\n", g_file_get_relative_path(root, file),
 			   local_err->message);
@@ -235,7 +233,7 @@ static gboolean up_sync_dir(GFile *root, GFile *file, const gchar *remote_path)
 			if (!up_sync_file(root, child, child_remote_path))
 				status = FALSE;
 		} else {
-			gc_free gchar* rel_path = g_file_get_relative_path(root, file);
+			gc_free gchar *rel_path = g_file_get_relative_path(root, file);
 
 			g_printerr("WARNING: Skipping special file %s\n", rel_path);
 		}
@@ -256,7 +254,8 @@ static gboolean up_sync_dir(GFile *root, GFile *file, const gchar *remote_path)
 
 				if (!opt_dryrun) {
 					if (!mega_session_rm(s, node_path, &local_err)) {
-						g_printerr("ERROR: Can't remove %s: %s\n", node_path, local_err->message);
+						g_printerr("ERROR: Can't remove %s: %s\n", node_path,
+							   local_err->message);
 						g_clear_error(&local_err);
 						status = FALSE;
 					}
@@ -277,11 +276,10 @@ static gboolean up_sync_dir(GFile *root, GFile *file, const gchar *remote_path)
 // helper function: delete a local directory recursively
 static gboolean delete_recursively(GFile *file, GError **error)
 {
-	gc_object_unref GFileEnumerator *e = g_file_enumerate_children(file, "standard::*",
-						G_FILE_QUERY_INFO_NONE,
-						NULL, error);
-  if (!e)
-    return FALSE;
+	gc_object_unref GFileEnumerator *e =
+		g_file_enumerate_children(file, "standard::*", G_FILE_QUERY_INFO_NONE, NULL, error);
+	if (!e)
+		return FALSE;
 
 	GFileInfo *fi;
 	while ((fi = g_file_enumerator_next_file(e, NULL, NULL))) {
@@ -313,20 +311,20 @@ static gboolean dl_sync_file(struct mega_node *node, GFile *file, const gchar *r
 {
 	GError *local_err = NULL;
 	gchar *local_path = g_file_get_path(file);
-  // if the local timestamp is not available, fall back to the upload timestamp
-  glong timestamp = node->local_ts > 0 ? node->local_ts : node->timestamp;
+	// if the local timestamp is not available, fall back to the upload timestamp
+	glong timestamp = node->local_ts > 0 ? node->local_ts : node->timestamp;
 
 	if (g_file_query_exists(file, NULL)) {
-    GFileType file_type = g_file_query_file_type(file, G_FILE_QUERY_INFO_NONE, NULL);
+		GFileType file_type = g_file_query_file_type(file, G_FILE_QUERY_INFO_NONE, NULL);
 
-    // check whether the file is a directory
-	  if (!opt_force && file_type == G_FILE_TYPE_DIRECTORY) {
+		// check whether the file is a directory
+		if (!opt_force && file_type == G_FILE_TYPE_DIRECTORY) {
 			g_printerr("ERROR: Target is a directory, cannot overwrite (use --force): %s\n", remote_path);
 			return FALSE;
 		}
 
-    // check special file types
-	  if (file_type != G_FILE_TYPE_DIRECTORY && file_type != G_FILE_TYPE_REGULAR) {
+		// check special file types
+		if (file_type != G_FILE_TYPE_DIRECTORY && file_type != G_FILE_TYPE_REGULAR) {
 			g_printerr("ERROR: Target is not a regular file, cannot overwrite: %s\n", remote_path);
 			return FALSE;
 		}
@@ -370,21 +368,23 @@ static gboolean dl_sync_file(struct mega_node *node, GFile *file, const gchar *r
 			return FALSE;
 		}
 
-    if (!opt_quiet)
-      g_print("R %s\n", g_file_get_path(file));
+		if (!opt_quiet)
+			g_print("R %s\n", g_file_get_path(file));
 
 		if (!opt_dryrun) {
-	    if (file_type == G_FILE_TYPE_DIRECTORY) {
-        if (!delete_recursively(file, &local_err)) {
-				  g_printerr("ERROR: Can't remove %s: %s\n", g_file_get_path(file), local_err->message);
-				  return FALSE;
-        }
-      } else {
-			  if (!g_file_delete(file, NULL, &local_err)) {
-				  g_printerr("ERROR: Can't delete %s: %s\n", g_file_get_path(file), local_err->message);
-				  return FALSE;
-			  }
-      }
+			if (file_type == G_FILE_TYPE_DIRECTORY) {
+				if (!delete_recursively(file, &local_err)) {
+					g_printerr("ERROR: Can't remove %s: %s\n", g_file_get_path(file),
+						   local_err->message);
+					return FALSE;
+				}
+			} else {
+				if (!g_file_delete(file, NULL, &local_err)) {
+					g_printerr("ERROR: Can't delete %s: %s\n", g_file_get_path(file),
+						   local_err->message);
+					return FALSE;
+				}
+			}
 		}
 	}
 
@@ -420,7 +420,6 @@ static gboolean dl_sync_file(struct mega_node *node, GFile *file, const gchar *r
 	return TRUE;
 }
 
-
 static gboolean dl_sync_dir(struct mega_node *node, GFile *file, const gchar *remote_path)
 {
 	GError *local_err = NULL;
@@ -429,48 +428,48 @@ static gboolean dl_sync_dir(struct mega_node *node, GFile *file, const gchar *re
 
 	gc_free gchar *local_path = g_file_get_path(file);
 
-  GFileType file_type = g_file_query_file_type(file, 0, NULL);
+	GFileType file_type = g_file_query_file_type(file, 0, NULL);
 
-  // does the file exist?
-  if (file_type != G_FILE_TYPE_UNKNOWN) {
-    // regular file that needs to be replaced by a directory?
-    if (file_type == G_FILE_TYPE_REGULAR) {
-printf("Regular file\n");
-      if (!opt_quiet)
-        g_print("R %s\n", local_path);
+	// does the file exist?
+	if (file_type != G_FILE_TYPE_UNKNOWN) {
+		// regular file that needs to be replaced by a directory?
+		if (file_type == G_FILE_TYPE_REGULAR) {
+			printf("Regular file\n");
+			if (!opt_quiet)
+				g_print("R %s\n", local_path);
 
-  		if (!opt_dryrun) {
-		    if (!g_file_delete(file, NULL, &local_err)) {
-			    g_printerr("ERROR: Can't delete %s: %s\n", g_file_get_path(file), local_err->message);
-			    return FALSE;
-		    }
-      }
-    } else if (file_type != G_FILE_TYPE_DIRECTORY) {
-	    g_printerr("ERROR: Target is not a directory, cannot write here: %s\n", local_path);
-	    return FALSE;
-    }
-  }
+			if (!opt_dryrun) {
+				if (!g_file_delete(file, NULL, &local_err)) {
+					g_printerr("ERROR: Can't delete %s: %s\n", g_file_get_path(file),
+						   local_err->message);
+					return FALSE;
+				}
+			}
+		} else if (file_type != G_FILE_TYPE_DIRECTORY) {
+			g_printerr("ERROR: Target is not a directory, cannot write here: %s\n", local_path);
+			return FALSE;
+		}
+	}
 
-  if (!g_file_query_exists(file, NULL)) {
-    // file does not exist, create the directory
-	  if (!opt_quiet)
-		  g_print("D %s\n", local_path);
+	if (!g_file_query_exists(file, NULL)) {
+		// file does not exist, create the directory
+		if (!opt_quiet)
+			g_print("D %s\n", local_path);
 
-	  if (!opt_dryrun) {
-		  if (!g_file_make_directory(file, NULL, &local_err)) {
-			  g_printerr("ERROR: Can't create local directory %s: %s\n", local_path,
-				     local_err->message);
-			  g_clear_error(&local_err);
-			  return FALSE;
-		  }
-	  }
-  }
+		if (!opt_dryrun) {
+			if (!g_file_make_directory(file, NULL, &local_err)) {
+				g_printerr("ERROR: Can't create local directory %s: %s\n", local_path,
+					   local_err->message);
+				g_clear_error(&local_err);
+				return FALSE;
+			}
+		}
+	}
 
 	if (opt_delete) {
 		// get list of local children
-		gc_object_unref GFileEnumerator *e = g_file_enumerate_children(file, "standard::*",
-						  G_FILE_QUERY_INFO_NONE,
-						  NULL, &local_err);
+		gc_object_unref GFileEnumerator *e =
+			g_file_enumerate_children(file, "standard::*", G_FILE_QUERY_INFO_NONE, NULL, &local_err);
 		if (!e) {
 			g_printerr("ERROR: Can't read local directory %s: %s\n", g_file_get_path(file),
 				   local_err->message);
@@ -522,25 +521,27 @@ printf("Regular file\n");
 			fi = (GFileInfo *)g_hash_table_lookup(hash_table, i->data);
 			if (fi) {
 				GFileType type = g_file_info_get_file_type(fi);
-				gc_free gchar *local_file = g_strconcat(g_file_get_path(file), "/", g_file_info_get_name(fi), NULL);
+				gc_free gchar *local_file =
+					g_strconcat(g_file_get_path(file), "/", g_file_info_get_name(fi), NULL);
 
 				g_print("R %s\n", local_file);
 
 				if (!opt_dryrun) {
 					if (type == G_FILE_TYPE_DIRECTORY) {
 						if (!delete_recursively(g_file_new_for_path(local_file), &local_err)) {
-							g_printerr("ERROR: Can't delete local directory %s: %s\n", local_file,
-								   local_err->message);
+							g_printerr("ERROR: Can't delete local directory %s: %s\n",
+								   local_file, local_err->message);
 							status = FALSE;
 						}
 					} else if (type == G_FILE_TYPE_REGULAR) {
 						if (!g_file_delete(g_file_new_for_path(local_file), NULL, &local_err)) {
-							g_printerr("ERROR: Can't delete local file %s: %s\n", local_file,
-								   local_err->message);
+							g_printerr("ERROR: Can't delete local file %s: %s\n",
+								   local_file, local_err->message);
 							status = FALSE;
 						}
 					} else
-						g_printerr("WARNING: Skipping special file %s\n", g_file_info_get_name(fi));
+						g_printerr("WARNING: Skipping special file %s\n",
+							   g_file_info_get_name(fi));
 				}
 				g_object_unref(fi);
 			} else {
@@ -623,7 +624,7 @@ err:
 const struct shell_tool shell_tool_sync = {
 	.name = "sync",
 	.main = sync_main,
-	.usages = (char*[]){
+	.usages = (char *[]){
 		"[-n] [-q] [--force] [--no-progress] [--delete] --local <path> --remote <remotepath>",
 		"[-n] [-q] [--force] [--no-progress] [--delete] --download --local <path> --remote <remotepath>",
 		NULL
