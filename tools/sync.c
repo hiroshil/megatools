@@ -30,7 +30,6 @@ static gboolean opt_delete;
 static gboolean opt_download;
 static gboolean opt_noprogress;
 static gboolean opt_dryrun;
-static gboolean opt_quiet;
 static gboolean opt_force;
 static struct mega_session *s;
 
@@ -41,7 +40,6 @@ static GOptionEntry entries[] = {
 	{ "download", 'd', 0, G_OPTION_ARG_NONE, &opt_download, "Download files from mega", NULL },
 	{ "no-progress", '\0', 0, G_OPTION_ARG_NONE, &opt_noprogress, "Disable progress bar", NULL },
 	{ "dryrun", 'n', 0, G_OPTION_ARG_NONE, &opt_dryrun, "Don't perform any actual changes", NULL },
-	{ "quiet", 'q', 0, G_OPTION_ARG_NONE, &opt_quiet, "Output warnings and errors only", NULL },
 	{ "force", '\0', 0, G_OPTION_ARG_NONE, &opt_force, "Overwrite directories on target with files", NULL },
 	{ NULL }
 };
@@ -61,16 +59,14 @@ static gboolean up_sync_file(GFile *root, GFile *file, const gchar *remote_path)
 	GError *local_err = NULL;
 	gc_free gchar *local_path = g_file_get_path(file);
 
-	GStatBuf fileStat;
-	if (g_stat(local_path, &fileStat)) {
+	GStatBuf st;
+	if (g_stat(local_path, &st)) {
 		g_printerr("ERROR: Unable to stat %s\n", local_path);
 		return FALSE;
 	}
 
-	if (fileStat.st_size <= 0) {
-		if (mega_debug & MEGA_DEBUG_APP) {
-			g_print("Ignoring empty file %s\n", local_path);
-		}
+	if (st.st_size <= 0) {
+		tool_print_debug("Ignoring empty file %s\n", local_path);
 		return FALSE;
 	}
 
@@ -84,42 +80,33 @@ static gboolean up_sync_file(GFile *root, GFile *file, const gchar *remote_path)
 
 		// if the local timestamp is not available, fall back to the upload timestamp
 		glong timestamp = node->local_ts > 0 ? node->local_ts : node->timestamp;
-
-		gboolean doUpload = FALSE;
+		gboolean do_upload = FALSE;
 
 		// size check
-		if (node->size != fileStat.st_size) {
-			doUpload = TRUE;
-			if (mega_debug & MEGA_DEBUG_APP)
-				g_print("File %s: sizes differ\n", remote_path);
+		if (node->size != st.st_size) {
+			do_upload = TRUE;
+
+			tool_print_debug("File %s: sizes differ\n", remote_path);
 		}
 
 		// timestamp check
-		if (!doUpload) {
-			if (fileStat.st_mtime != timestamp) {
-				doUpload = TRUE;
+		if (!do_upload) {
+			if (st.st_mtime != timestamp) {
+				do_upload = TRUE;
+
 				// get local file timestamp
-				if (mega_debug & MEGA_DEBUG_APP) {
-					guchar local_ts_buf[20];
-					g_snprintf(&local_ts_buf[0], 20, "%lu", fileStat.st_mtime);
-					guchar remote_ts_buf[20];
-					g_snprintf(&remote_ts_buf[0], 20, "%lu", timestamp);
-					g_print("File %s: timestamp mismatch\n", remote_path);
-					g_print("  Local file timestamp is: %s\n", &local_ts_buf[0]);
-					g_print("  Remote timestamp is: %s\n", &remote_ts_buf[0]);
-				}
+				tool_print_debug("File %s: timestamp mismatch\n", remote_path);
+				tool_print_debug("  Local file timestamp is: %lu\n", st.st_mtime);
+				tool_print_debug("  Remote timestamp is: %lu\n", timestamp);
 			}
 		}
 
-		if (!doUpload) {
-			if (mega_debug & MEGA_DEBUG_APP) {
-				g_print("File %s appears identical, skipping\n", remote_path);
-			}
+		if (!do_upload) {
+			tool_print_debug("File %s appears identical, skipping\n", remote_path);
 			return FALSE;
 		}
 
-		if (!opt_quiet)
-			g_print("R %s\n", remote_path);
+		tool_print_info("R %s\n", remote_path);
 
 		if (!opt_dryrun) {
 			if (!mega_session_rm(s, remote_path, &local_err)) {
@@ -129,8 +116,7 @@ static gboolean up_sync_file(GFile *root, GFile *file, const gchar *remote_path)
 		}
 	}
 
-	if (!opt_quiet)
-		g_print("F %s\n", remote_path);
+	tool_print_info("F %s\n", remote_path);
 
 	if (!opt_dryrun) {
 		g_free(cur_file);
@@ -163,8 +149,7 @@ static gboolean up_sync_dir(GFile *root, GFile *file, const gchar *remote_path)
 		struct mega_node *node = mega_session_stat(s, remote_path);
 		// if the remote node is a file, it is deleted and replaced by the directory
 		if (node && node->type == MEGA_NODE_FILE) {
-			if (!opt_quiet)
-				g_print("R %s\n", remote_path);
+			tool_print_info("R %s\n", remote_path);
 
 			if (!opt_dryrun) {
 				if (!mega_session_rm(s, remote_path, &local_err)) {
@@ -175,8 +160,7 @@ static gboolean up_sync_dir(GFile *root, GFile *file, const gchar *remote_path)
 		}
 
 		if (!node) {
-			if (!opt_quiet)
-				g_print("D %s\n", remote_path);
+			tool_print_info("D %s\n", remote_path);
 
 			if (!opt_dryrun) {
 				if (!mega_session_mkdir(s, remote_path, &local_err)) {
@@ -192,11 +176,10 @@ static gboolean up_sync_dir(GFile *root, GFile *file, const gchar *remote_path)
 	if (opt_delete) {
 		// get list of remote files
 		remote_children = mega_session_ls(s, remote_path, FALSE);
-		GSList *c;
-
 		hash_table = g_hash_table_new(&g_str_hash, &g_str_equal);
 
 		// insert nodes into hash table indexed by name
+		GSList *c;
 		for (c = remote_children; c; c = c->next) {
 			struct mega_node *n = c->data;
 			g_hash_table_insert(hash_table, (gpointer)n->name, (gpointer)n);
@@ -222,8 +205,7 @@ static gboolean up_sync_dir(GFile *root, GFile *file, const gchar *remote_path)
 
 		if (opt_delete) {
 			if (!g_hash_table_remove(hash_table, (gconstpointer)name))
-				if (mega_debug & MEGA_DEBUG_APP)
-					g_print("New file: %s\n", name);
+				tool_print_debug("New file: %s\n", name);
 		}
 
 		if (type == G_FILE_TYPE_DIRECTORY) {
@@ -249,8 +231,7 @@ static gboolean up_sync_dir(GFile *root, GFile *file, const gchar *remote_path)
 			if (n) {
 				gc_free gchar *node_path = mega_node_get_path_dup(n);
 
-				if (!opt_quiet)
-					g_print("R %s\n", node_path);
+				tool_print_info("R %s\n", node_path);
 
 				if (!opt_dryrun) {
 					if (!mega_session_rm(s, node_path, &local_err)) {
@@ -289,15 +270,14 @@ static gboolean delete_recursively(GFile *file, GError **error)
 			if (!delete_recursively(g_file_new_for_path(child), error))
 				return FALSE;
 		} else {
-			if (mega_debug & MEGA_DEBUG_APP)
-				g_print("Deleting: %s\n", child);
+			tool_print_debug("Deleting: %s\n", child);
 
 			if (!g_file_delete(g_file_new_for_path(child), NULL, error))
 				return FALSE;
 		}
 	}
-	if (mega_debug & MEGA_DEBUG_APP)
-		g_print("Deleting: %s\n", g_file_get_path(file));
+
+	tool_print_debug("Deleting: %s\n", g_file_get_path(file));
 
 	if (!g_file_delete(file, NULL, error))
 		return FALSE;
@@ -329,31 +309,23 @@ static gboolean dl_sync_file(struct mega_node *node, GFile *file, const gchar *r
 			return FALSE;
 		}
 
-		gboolean doDownload = FALSE;
+		gboolean do_download = FALSE;
 
-		GStatBuf fileStat;
-		if (!g_stat(g_file_get_path(file), &fileStat)) {
+		GStatBuf st;
+		if (!g_stat(g_file_get_path(file), &st)) {
 			// size check
-			if (node->size != fileStat.st_size) {
-				doDownload = TRUE;
-				if (mega_debug & MEGA_DEBUG_APP)
-					g_print("File %s: sizes differ\n", remote_path);
+			if (node->size != st.st_size) {
+				do_download = TRUE;
+				tool_print_debug("File %s: sizes differ\n", remote_path);
 			}
 
 			// timestamp check
-			if (!doDownload) {
-				if (fileStat.st_mtime != timestamp) {
-					doDownload = TRUE;
-					// get local file timestamp
-					if (mega_debug & MEGA_DEBUG_APP) {
-						guchar local_ts_buf[20];
-						g_snprintf(&local_ts_buf[0], 20, "%lu", fileStat.st_mtime);
-						guchar remote_ts_buf[20];
-						g_snprintf(&remote_ts_buf[0], 20, "%lu", timestamp);
-						g_print("File %s: timestamp mismatch\n", remote_path);
-						g_print("  Local file timestamp is: %s\n", &local_ts_buf[0]);
-						g_print("  Remote timestamp is: %s\n", &remote_ts_buf[0]);
-					}
+			if (!do_download) {
+				if (st.st_mtime != timestamp) {
+					do_download = TRUE;
+					tool_print_debug("File %s: timestamp mismatch\n", remote_path);
+					tool_print_debug("  Local file timestamp is: %lu\n", st.st_mtime);
+					tool_print_debug("  Remote timestamp is: %lu\n", timestamp);
 				}
 			}
 		} else {
@@ -361,15 +333,12 @@ static gboolean dl_sync_file(struct mega_node *node, GFile *file, const gchar *r
 			return FALSE;
 		}
 
-		if (!doDownload) {
-			if (mega_debug & MEGA_DEBUG_APP) {
-				g_print("File %s appears identical, skipping\n", remote_path);
-			}
+		if (!do_download) {
+			tool_print_debug("File %s appears identical, skipping\n", remote_path);
 			return FALSE;
 		}
 
-		if (!opt_quiet)
-			g_print("R %s\n", g_file_get_path(file));
+		tool_print_info("R %s\n", g_file_get_path(file));
 
 		if (!opt_dryrun) {
 			if (file_type == G_FILE_TYPE_DIRECTORY) {
@@ -388,8 +357,7 @@ static gboolean dl_sync_file(struct mega_node *node, GFile *file, const gchar *r
 		}
 	}
 
-	if (!opt_quiet)
-		g_print("F %s\n", local_path);
+	tool_print_info("F %s\n", local_path);
 
 	if (!opt_dryrun) {
 		g_free(cur_file);
@@ -434,9 +402,7 @@ static gboolean dl_sync_dir(struct mega_node *node, GFile *file, const gchar *re
 	if (file_type != G_FILE_TYPE_UNKNOWN) {
 		// regular file that needs to be replaced by a directory?
 		if (file_type == G_FILE_TYPE_REGULAR) {
-			printf("Regular file\n");
-			if (!opt_quiet)
-				g_print("R %s\n", local_path);
+			tool_print_info("R %s\n", local_path);
 
 			if (!opt_dryrun) {
 				if (!g_file_delete(file, NULL, &local_err)) {
@@ -453,8 +419,7 @@ static gboolean dl_sync_dir(struct mega_node *node, GFile *file, const gchar *re
 
 	if (!g_file_query_exists(file, NULL)) {
 		// file does not exist, create the directory
-		if (!opt_quiet)
-			g_print("D %s\n", local_path);
+		tool_print_info("D %s\n", local_path);
 
 		if (!opt_dryrun) {
 			if (!g_file_make_directory(file, NULL, &local_err)) {
@@ -497,8 +462,7 @@ static gboolean dl_sync_dir(struct mega_node *node, GFile *file, const gchar *re
 		if (opt_delete) {
 			fi = (GFileInfo *)g_hash_table_lookup(hash_table, child->name);
 			if (!g_hash_table_remove(hash_table, (gconstpointer)child->name))
-				if (mega_debug & MEGA_DEBUG_APP)
-					g_print("New file: %s\n", child->name);
+				tool_print_debug("New file: %s\n", child->name);
 			if (fi)
 				g_object_unref(fi);
 		}
@@ -524,7 +488,7 @@ static gboolean dl_sync_dir(struct mega_node *node, GFile *file, const gchar *re
 				gc_free gchar *local_file =
 					g_strconcat(g_file_get_path(file), "/", g_file_info_get_name(fi), NULL);
 
-				g_print("R %s\n", local_file);
+				tool_print_info("R %s\n", local_file);
 
 				if (!opt_dryrun) {
 					if (type == G_FILE_TYPE_DIRECTORY) {
@@ -562,24 +526,19 @@ static gboolean dl_sync_dir(struct mega_node *node, GFile *file, const gchar *re
 static int sync_main(int ac, char *av[])
 {
 	gc_object_unref GFile *local_file = NULL;
-	gint status = 0;
+	gint status = 1;
 
-	tool_init(&ac, &av, "- synchronize a local folder with a remote mega.nz folder", entries,
+	tool_init(&ac, &av, "- synchronize a local directory with a remote one", entries,
 		  TOOL_INIT_AUTH | TOOL_INIT_UPLOAD_OPTS | TOOL_INIT_DOWNLOAD_OPTS);
 
 	if (!opt_local_path || !opt_remote_path) {
 		g_printerr("ERROR: You must specify local and remote paths\n");
-		goto err;
-	}
-
-	if (opt_quiet) {
-		opt_noprogress = TRUE;
-		mega_debug = 0;
+		goto out;
 	}
 
 	s = tool_start_session(TOOL_SESSION_OPEN);
 	if (!s)
-		goto err;
+		goto out;
 
 	mega_session_watch_status(s, status_callback, NULL);
 
@@ -587,46 +546,42 @@ static int sync_main(int ac, char *av[])
 	struct mega_node *remote_dir = mega_session_stat(s, opt_remote_path);
 	if (!remote_dir) {
 		g_printerr("ERROR: Remote directory not found %s\n", opt_remote_path);
-		goto err;
+		goto out;
 	} else if (!mega_node_is_container(remote_dir)) {
-		g_printerr("ERROR: Remote path must be a folder: %s\n", opt_remote_path);
-		goto err;
+		g_printerr("ERROR: Remote path must point to a directory: %s\n", opt_remote_path);
+		goto out;
 	}
 
 	// check local dir existence
 	local_file = g_file_new_for_path(opt_local_path);
 
 	if (opt_download) {
-		if (!dl_sync_dir(remote_dir, local_file, opt_remote_path))
-			goto err;
+		if (dl_sync_dir(remote_dir, local_file, opt_remote_path))
+			status = 0;
 	} else {
 		if (g_file_query_file_type(local_file, 0, NULL) != G_FILE_TYPE_DIRECTORY) {
-			g_printerr("ERROR: Local directory not found %s\n", opt_local_path);
-			goto err;
+			g_printerr("ERROR: Local directory not found or not a directory: %s\n", opt_local_path);
+			goto out;
 		}
 
-		if (!up_sync_dir(local_file, local_file, opt_remote_path))
-			status = 1;
+		if (up_sync_dir(local_file, local_file, opt_remote_path))
+			status = 0;
 
 		mega_session_save(s, NULL);
 	}
 
+out:
 	g_free(cur_file);
 	tool_fini(s);
 	return status;
-
-err:
-	g_free(cur_file);
-	tool_fini(s);
-	return 1;
 }
 
 const struct shell_tool shell_tool_sync = {
 	.name = "sync",
 	.main = sync_main,
 	.usages = (char *[]){
-		"[-n] [-q] [--force] [--no-progress] [--delete] --local <path> --remote <remotepath>",
-		"[-n] [-q] [--force] [--no-progress] [--delete] --download --local <path> --remote <remotepath>",
+		"[-n] [--force] [--no-progress] [--delete] --local <path> --remote <remotepath>",
+		"[-n] [--force] [--no-progress] [--delete] --download --local <path> --remote <remotepath>",
 		NULL
 	},
 };

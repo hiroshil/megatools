@@ -9,8 +9,8 @@ megatools sync - Synchronize a local folder with a remote mega.nz folder
 SYNOPSIS
 --------
 [verse]
-'megatools sync' [-n] [-q] [--force] [--delete] [--no-progress] --local <path> --remote <remotepath>
-'megatools sync' [-n] [-q] [--force] [--delete] [--no-progress] --download --local <path> --remote <remotepath>
+'megatools sync' [-n] [--force] [--delete] [--no-progress] --local <path> --remote <remotepath>
+'megatools sync' [-n] [--force] [--delete] [--no-progress] --download --local <path> --remote <remotepath>
 
 
 DESCRIPTION
@@ -83,11 +83,6 @@ OPTIONS
 
 --no-progress::
 	Disable upload progress reporting.
-
--q::
---quiet::
-	Do not report file system operations. Only output messages and warnings.
-	This option implies --no-progress and disables debug messages.
 
 --delete::
 	Delete files and folders in a target directory that are not present in
