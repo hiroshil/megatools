@@ -30,7 +30,7 @@ static int rm_main(int ac, char *av[])
 	tool_init(&ac, &av, "- remove files from mega.nz", entries, TOOL_INIT_AUTH);
 
 	if (ac < 2) {
-		g_printerr("ERROR: No files specified for removal!\n");
+		tool_print_err("No files specified for removal!\n");
 		tool_fini(NULL);
 		return 1;
 	}
@@ -46,7 +46,7 @@ static int rm_main(int ac, char *av[])
 		gc_free gchar *path = tool_convert_filename(av[i], FALSE);
 
 		if (!mega_session_rm(s, path, &local_err)) {
-			g_printerr("ERROR: Can't remove %s: %s\n", path, local_err->message);
+			tool_print_err("Can't remove %s: %s\n", path, local_err->message);
 			g_clear_error(&local_err);
 			status = 1;
 		}

@@ -45,7 +45,7 @@ static int put_main(int ac, char *av[])
 	tool_init(&ac, &av, "- upload files to mega.nz", entries, TOOL_INIT_AUTH | TOOL_INIT_UPLOAD_OPTS);
 
 	if (ac < 2) {
-		g_printerr("ERROR: No files specified for upload!\n");
+		tool_print_err("No files specified for upload!\n");
 		tool_fini(NULL);
 		return 1;
 	}
@@ -71,7 +71,7 @@ static int put_main(int ac, char *av[])
 			if (!opt_noprogress && tool_is_stdout_tty())
 				g_print("\r" ESC_CLREOL "\n");
 
-			g_printerr("ERROR: Upload failed for '%s': %s\n", path, local_err->message);
+			tool_print_err("Upload failed for '%s': %s\n", path, local_err->message);
 			g_clear_error(&local_err);
 
 			status = 1;
@@ -79,7 +79,7 @@ static int put_main(int ac, char *av[])
 			if (!opt_noprogress) {
 				if (tool_is_stdout_tty())
 					g_print("\r" ESC_CLREOL);
-				g_print("Uploaded %s\n", cur_file);
+				tool_print_info("Uploaded %s\n", cur_file);
 			}
 		}
 	}

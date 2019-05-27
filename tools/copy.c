@@ -54,11 +54,11 @@ static gboolean up_sync_file(GFile *root, GFile *file, const gchar *remote_path)
 
 	struct mega_node *node = mega_session_stat(s, remote_path);
 	if (node) {
-		g_printerr("ERROR: File already exists at %s\n", remote_path);
+		tool_print_err("File already exists at %s\n", remote_path);
 		return FALSE;
 	}
 
-	g_print("F %s\n", remote_path);
+	tool_print_info("F %s\n", remote_path);
 
 	if (!opt_dryrun) {
 		g_free(cur_file);
@@ -69,7 +69,7 @@ static gboolean up_sync_file(GFile *root, GFile *file, const gchar *remote_path)
 			if (!opt_noprogress && tool_is_stdout_tty())
 				g_print("\r" ESC_CLREOL);
 
-			g_printerr("ERROR: Upload failed for %s: %s\n", remote_path, local_err->message);
+			tool_print_err("Upload failed for %s: %s\n", remote_path, local_err->message);
 			g_clear_error(&local_err);
 			return FALSE;
 		}
@@ -89,16 +89,16 @@ static gboolean up_sync_dir(GFile *root, GFile *file, const gchar *remote_path)
 	if (root != file) {
 		struct mega_node *node = mega_session_stat(s, remote_path);
 		if (node && node->type == MEGA_NODE_FILE) {
-			g_printerr("ERROR: File already exists at %s\n", remote_path);
+			tool_print_err("File already exists at %s\n", remote_path);
 			return FALSE;
 		}
 
 		if (!node) {
-			g_print("D %s\n", remote_path);
+			tool_print_info("D %s\n", remote_path);
 
 			if (!opt_dryrun) {
 				if (!mega_session_mkdir(s, remote_path, &local_err)) {
-					g_printerr("ERROR: Can't create remote directory %s: %s\n", remote_path,
+					tool_print_err("Can't create remote directory %s: %s\n", remote_path,
 						   local_err->message);
 					g_clear_error(&local_err);
 					return FALSE;
@@ -113,7 +113,7 @@ static gboolean up_sync_dir(GFile *root, GFile *file, const gchar *remote_path)
 					  opt_nofollow ? G_FILE_QUERY_INFO_NOFOLLOW_SYMLINKS : G_FILE_QUERY_INFO_NONE,
 					  NULL, &local_err);
 	if (!e) {
-		g_printerr("ERROR: Can't read local directory %s: %s\n", g_file_get_relative_path(root, file),
+		tool_print_err("Can't read local directory %s: %s\n", g_file_get_relative_path(root, file),
 			   local_err->message);
 		g_clear_error(&local_err);
 		return FALSE;
@@ -135,7 +135,7 @@ static gboolean up_sync_dir(GFile *root, GFile *file, const gchar *remote_path)
 		} else {
 			gc_free gchar* rel_path = g_file_get_relative_path(root, file);
 
-			g_printerr("WARNING: Skipping special file %s\n", rel_path);
+			tool_print_warn("Skipping special file %s\n", rel_path);
 		}
 
 		g_object_unref(i);
@@ -152,11 +152,11 @@ static gboolean dl_sync_file(struct mega_node *node, GFile *file, const gchar *r
 	gchar *local_path = g_file_get_path(file);
 
 	if (g_file_query_exists(file, NULL)) {
-		g_printerr("ERROR: File already exists at %s\n", local_path);
+		tool_print_err("File already exists at %s\n", local_path);
 		return FALSE;
 	}
 
-	g_print("F %s\n", local_path);
+	tool_print_info("F %s\n", local_path);
 
 	if (!opt_dryrun) {
 		g_free(cur_file);
@@ -166,7 +166,7 @@ static gboolean dl_sync_file(struct mega_node *node, GFile *file, const gchar *r
 			if (!opt_noprogress && tool_is_stdout_tty())
 				g_print("\r" ESC_CLREOL);
 
-			g_printerr("ERROR: Download failed for %s: %s\n", remote_path, local_err->message);
+			tool_print_err("Download failed for %s: %s\n", remote_path, local_err->message);
 			g_clear_error(&local_err);
 			return FALSE;
 		}
@@ -184,11 +184,11 @@ static gboolean dl_sync_dir(struct mega_node *node, GFile *file, const gchar *re
 	gc_free gchar *local_path = g_file_get_path(file);
 
 	if (!g_file_query_exists(file, NULL)) {
-		g_print("D %s\n", local_path);
+		tool_print_info("D %s\n", local_path);
 
 		if (!opt_dryrun) {
 			if (!g_file_make_directory(file, NULL, &local_err)) {
-				g_printerr("ERROR: Can't create local directory %s: %s\n", local_path,
+				tool_print_err("Can't create local directory %s: %s\n", local_path,
 					   local_err->message);
 				g_clear_error(&local_err);
 				return FALSE;
@@ -196,7 +196,7 @@ static gboolean dl_sync_dir(struct mega_node *node, GFile *file, const gchar *re
 		}
 	} else {
 		if (g_file_query_file_type(file, 0, NULL) != G_FILE_TYPE_DIRECTORY) {
-			g_printerr("ERROR: Can't create local directory %s: file exists\n", local_path);
+			tool_print_err("Can't create local directory %s: file exists\n", local_path);
 			return FALSE;
 		}
 	}
@@ -233,7 +233,7 @@ static int copy_main(int ac, char *av[])
 		  TOOL_INIT_AUTH | TOOL_INIT_UPLOAD_OPTS | TOOL_INIT_DOWNLOAD_OPTS);
 
 	if (!opt_local_path || !opt_remote_path) {
-		g_printerr("ERROR: You must specify local and remote paths\n");
+		tool_print_err("You must specify local and remote paths\n");
 		goto err;
 	}
 
@@ -246,10 +246,10 @@ static int copy_main(int ac, char *av[])
 	// check remote dir existence
 	struct mega_node *remote_dir = mega_session_stat(s, opt_remote_path);
 	if (!remote_dir) {
-		g_printerr("ERROR: Remote directory not found %s\n", opt_remote_path);
+		tool_print_err("Remote directory not found %s\n", opt_remote_path);
 		goto err;
 	} else if (!mega_node_is_container(remote_dir)) {
-		g_printerr("ERROR: Remote path must be a folder: %s\n", opt_remote_path);
+		tool_print_err("Remote path must be a folder: %s\n", opt_remote_path);
 		goto err;
 	}
 
@@ -261,7 +261,7 @@ static int copy_main(int ac, char *av[])
 			goto err;
 	} else {
 		if (g_file_query_file_type(local_file, 0, NULL) != G_FILE_TYPE_DIRECTORY) {
-			g_printerr("ERROR: Local directory not found %s\n", opt_local_path);
+			tool_print_err("Local directory not found %s\n", opt_local_path);
 			goto err;
 		}
 

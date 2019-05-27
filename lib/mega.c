@@ -22,6 +22,7 @@
 #include "http.h"
 #include "sjson.h"
 #include "alloc.h"
+#include "tools.h"
 
 #include <gio/gio.h>
 #include <glib/gstdio.h>
@@ -1640,10 +1641,10 @@ static void build_node_tree(struct mega_session *s)
 
 #if GLIB_CHECK_VERSION(2, 40, 0)
 		if (!g_hash_table_insert(handle_map, n->handle, n))
-			g_printerr("WARNING: Dup node handle detected %s\n", n->handle);
+			tool_print_warn("Dup node handle detected %s\n", n->handle);
 #else
 		if (g_hash_table_lookup(handle_map, n->handle))
-			g_printerr("WARNING: Dup node handle detected %s\n", n->handle);
+			tool_print_warn("Dup node handle detected %s\n", n->handle);
 		else
 			g_hash_table_insert(handle_map, n->handle, n);
 #endif
@@ -1863,7 +1864,7 @@ static struct mega_node *mega_node_parse(struct mega_session *s, const gchar *no
 
 	// sanity check parsed values
 	if (!node_h || strlen(node_h) == 0) {
-		g_printerr("WARNING: Skipping FS node without handle\n");
+		tool_print_warn("Skipping FS node without handle\n");
 		return NULL;
 	}
 
@@ -1896,19 +1897,19 @@ static struct mega_node *mega_node_parse(struct mega_session *s, const gchar *no
 
 	// allow only file and dir nodes
 	if (node_t != MEGA_NODE_FOLDER && node_t != MEGA_NODE_FILE) {
-		g_printerr("WARNING: Skipping FS node %s with unknown type %d\n", node_h, node_t);
+		tool_print_warn("Skipping FS node %s with unknown type %d\n", node_h, node_t);
 		return NULL;
 	}
 
 	// node has to have attributes
 	if (!node_a || strlen(node_a) == 0) {
-		g_printerr("WARNING: Skipping FS node %s without attributes\n", node_h);
+		tool_print_warn("Skipping FS node %s without attributes\n", node_h);
 		return NULL;
 	}
 
 	// node has to have a key
 	if (!node_k || strlen(node_k) == 0) {
-		g_printerr("WARNING: Skipping FS node %s because of missing node key\n", node_h);
+		tool_print_warn("Skipping FS node %s because of missing node key\n", node_h);
 		return NULL;
 	}
 
@@ -1956,13 +1957,13 @@ static struct mega_node *mega_node_parse(struct mega_session *s, const gchar *no
 	}
 
 	if (!encrypted_node_key) {
-		g_printerr("WARNING: Skipping FS node %s because node key wasn't found\n", node_h);
+		tool_print_warn("Skipping FS node %s because node key wasn't found\n", node_h);
 		return NULL;
 	}
 
 	// keys longer than 45 chars are RSA keys
 	if (strlen(encrypted_node_key) >= 46) {
-		g_printerr("WARNING: Skipping FS node %s because it has RSA key\n", node_h);
+		tool_print_warn("Skipping FS node %s because it has RSA key\n", node_h);
 		return NULL;
 	}
 
@@ -1970,18 +1971,18 @@ static struct mega_node *mega_node_parse(struct mega_session *s, const gchar *no
 	gsize node_key_len = 0;
 	gc_free guchar *node_key = b64_aes128_decrypt(encrypted_node_key, node_share_key, &node_key_len);
 	if (!node_key) {
-		g_printerr("WARNING: Skipping FS node %s because key can't be decrypted %s\n", node_h,
+		tool_print_warn("Skipping FS node %s because key can't be decrypted %s\n", node_h,
 			   encrypted_node_key);
 		return NULL;
 	}
 
 	if (node_t == MEGA_NODE_FILE && node_key_len != 32) {
-		g_printerr("WARNING: Skipping FS node %s because file key doesn't have 32 bytes\n", node_h);
+		tool_print_warn("Skipping FS node %s because file key doesn't have 32 bytes\n", node_h);
 		return NULL;
 	}
 
 	if (node_t == MEGA_NODE_FOLDER && node_key_len != 16) {
-		g_printerr("WARNING: Skipping FS node %s because folder key doesn't have 16 bytes\n", node_h);
+		tool_print_warn("Skipping FS node %s because folder key doesn't have 16 bytes\n", node_h);
 		return NULL;
 	}
 
@@ -1995,12 +1996,12 @@ static struct mega_node *mega_node_parse(struct mega_session *s, const gchar *no
 	gc_free gchar *node_name = NULL;
 	gc_free gchar *node_local_ts = NULL;
 	if (!decrypt_node_attrs(node_a, aes_key, &node_name, &node_local_ts)) {
-		g_printerr("WARNING: Skipping FS node %s because it has malformed attributes\n", node_h);
+		tool_print_warn("Skipping FS node %s because it has malformed attributes\n", node_h);
 		return NULL;
 	}
 
 	if (!node_name) {
-		g_printerr("WARNING: Skipping FS node %s because it is missing name\n", node_h);
+		tool_print_warn("Skipping FS node %s because it is missing name\n", node_h);
 		return NULL;
 	}
 
@@ -2015,7 +2016,7 @@ static struct mega_node *mega_node_parse(struct mega_session *s, const gchar *no
 
 	// check for invalid names
 	if (!strcmp(node_name, ".") || !strcmp(node_name, "..")) {
-		g_printerr("WARNING: Skipping FS node %s because it's name is invalid '%s'\n", node_h, node_name);
+		tool_print_warn("Skipping FS node %s because it's name is invalid '%s'\n", node_h, node_name);
 		return NULL;
 	}
 
@@ -2535,14 +2536,13 @@ gboolean mega_session_refresh(struct mega_session *s, GError **err)
 				s_json_get_member_string(ok, "k"); // b64(aes(share_key_for_h, master_key))
 
 			if (!ok_h || !ok_ha || !ok_k) {
-				g_printerr(
-					"WARNING: Skipping import of a key %s because it's missing required attributes\n",
+				tool_print_warn("Skipping import of a key %s because it's missing required attributes\n",
 					ok_h);
 				continue;
 			}
 
 			if (!handle_auth(ok_h, ok_ha, s->master_key)) {
-				g_printerr("WARNING: Skipping import of a key %s because it's authentication failed\n",
+				tool_print_warn("Skipping import of a key %s because it's authentication failed\n",
 					   ok_h);
 				continue;
 			}
@@ -3767,20 +3767,20 @@ static gpointer tman_manager_thread_fn(gpointer data)
 						|| g_error_matches(msg->error, HTTP_ERROR, HTTP_ERROR_SERVER_BUSY)
 						|| g_error_matches(msg->error, HTTP_ERROR, HTTP_ERROR_NO_RESPONSE)) {
 					if (c->failures_count > 8) {
-						g_printerr("WARNING: chunk upload failed too many times (%s), aborting transfer\n", msg->error->message);
+						tool_print_warn("chunk upload failed too many times (%s), aborting transfer\n", msg->error->message);
 
 						// mark transfer as aborted
 						t->error = msg->error;
 						msg->error = NULL;
 					} else {
-						g_printerr("WARNING: chunk upload failed (%s), re-trying after %d seconds\n", msg->error->message, (1 << c->failures_count));
+						tool_print_warn("chunk upload failed (%s), re-trying after %d seconds\n", msg->error->message, (1 << c->failures_count));
 						c->start_at = g_get_monotonic_time() + 1000 * 1000 * ((1 << c->failures_count));
 						c->failures_count++;
 					}
 				} else if (g_error_matches(msg->error, HTTP_ERROR, HTTP_ERROR_BANDWIDTH_LIMIT)) {
 					// we need to defer all further
 					// transfers by a lot
-					g_printerr("WARNING: over upload quota, delaying all transfers by 5 minutes\n");
+					tool_print_warn("over upload quota, delaying all transfers by 5 minutes\n");
 					GSList* ci;
 					for (ci = t->chunks; ci; ci = ci->next) {
 						struct transfer_chunk *c = ci->data;
@@ -3788,7 +3788,7 @@ static gpointer tman_manager_thread_fn(gpointer data)
 						c->start_at = now + 1000 * (5*60*1000 + g_random_int_range(0, 2000));
 					}
 				} else {
-					g_printerr("WARNING: chunk upload failed (%s), aborting transfer\n", msg->error->message);
+					tool_print_warn("chunk upload failed (%s), aborting transfer\n", msg->error->message);
 
 					// mark transfer as aborted
 					t->error = msg->error;
@@ -4125,7 +4125,7 @@ try_again:
 
 	if (!transfer_ok) {
 		if (retries-- > 0) {
-			g_printerr("WARNING: Mega upload failed (%s), retrying transfer (%d retries left)\n", local_err ? local_err->message : "???", retries);
+			tool_print_warn("Mega upload failed (%s), retrying transfer (%d retries left)\n", local_err ? local_err->message : "???", retries);
 			g_clear_error(&local_err);
 			goto try_again;
 		}
@@ -4221,17 +4221,17 @@ static gsize get_data_cb(gpointer buffer, gsize size, gpointer user_data)
 	int out_len;
 
 	if (!EVP_EncryptUpdate(data->ctx, buffer, &out_len, buffer, size)) {
-		g_printerr("ERROR: Failed to decrypt data during download\n");
+		tool_print_err("Failed to decrypt data during download\n");
 		return 0;
 	}
 
 	if (out_len != size) {
-		g_printerr("ERROR: Failed to decrypt data during download (out_len != size)\n");
+		tool_print_err("Failed to decrypt data during download (out_len != size)\n");
 		return 0;
 	}
 
 	if (!chunked_cbc_mac_update(&data->mac, buffer, size)) {
-		g_printerr("ERROR: Failed to run mac calculator during download\n");
+		tool_print_err("Failed to run mac calculator during download\n");
 		return 0;
 	}
 
@@ -4247,7 +4247,7 @@ static gsize get_data_cb(gpointer buffer, gsize size, gpointer user_data)
 		return size;
 
 	if (!g_output_stream_write_all(data->ostream, buffer, size, NULL, NULL, &local_err)) {
-		g_printerr("ERROR: Failed writing to stream: %s\n", local_err->message);
+		tool_print_err("Failed writing to stream: %s\n", local_err->message);
 		return 0;
 	}
 
@@ -4509,7 +4509,7 @@ retry:
 
 			// we only retry if we can seek the stream
 			if (seekable) {
-				g_printerr("WARNING: chunk download failed (%s), re-trying after %d seconds\n", local_err ? local_err->message : "?", (1 << tries));
+				tool_print_warn("chunk download failed (%s), re-trying after %d seconds\n", local_err ? local_err->message : "?", (1 << tries));
 				g_clear_error(&local_err);
 			}
 

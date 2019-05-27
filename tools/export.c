@@ -34,7 +34,7 @@ static int export_main(int ac, char *av[])
 	tool_init(&ac, &av, "- create public link for files at mega.nz", entries, TOOL_INIT_AUTH);
 	
 	if (ac < 2) {
-		g_printerr("ERROR: You must pass at least one remote path\n");
+		tool_print_err("You must pass at least one remote path\n");
 		tool_fini(NULL);
 		return 1;
 	}
@@ -50,10 +50,10 @@ static int export_main(int ac, char *av[])
 		struct mega_node *n = mega_session_stat(s, path);
 		
 		if (!n) {
-			g_printerr("ERROR: Remote file not found: %s\n", path);
+			tool_print_err("Remote file not found: %s\n", path);
 			goto out_slist_free;
 		} else if (n->type != MEGA_NODE_FILE) {
-			g_printerr("ERROR: Remote path is not a file: %s\n", path);
+			tool_print_err("Remote path is not a file: %s\n", path);
 			goto out_slist_free;
 		}
 
@@ -63,7 +63,7 @@ static int export_main(int ac, char *av[])
 	l = g_slist_reverse(l);
 
 	if (!mega_session_addlinks(s, l, &local_err)) {
-		g_printerr("ERROR: Can't read links info from mega.nz: %s\n", local_err->message);
+		tool_print_err("Can't read links info from mega.nz: %s\n", local_err->message);
 		goto out_slist_free;
 	}
 
@@ -75,7 +75,7 @@ static int export_main(int ac, char *av[])
 			g_print("%s\n", link);
 		} else {
 			gc_free gchar *node_path = mega_node_get_path_dup(n);
-			g_printerr("WARNING: Missing link for %s\n", node_path);
+			tool_print_warn("Missing link for %s\n", node_path);
 		}
 	}
 

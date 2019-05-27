@@ -62,7 +62,7 @@ static int ls_main(int ac, char *av[])
 	tool_init(&ac, &av, "- list files stored at mega.nz", entries, TOOL_INIT_AUTH);
 	
 	if (opt_long && opt_print0) {
-		g_printerr("ERROR: You can't combine --print0 and --long\n");
+		tool_print_err("You can't combine --print0 and --long\n");
 		tool_fini(NULL);
 		return 1;
 	}
@@ -96,7 +96,7 @@ static int ls_main(int ac, char *av[])
 
 	// export if requested
 	if (opt_export && !mega_session_addlinks(s, l, &local_err)) {
-		g_printerr("ERROR: Can't read links info from mega.nz: %s\n", local_err->message);
+		tool_print_err("Can't read links info from mega.nz: %s\n", local_err->message);
 		g_slist_free(l);
 		tool_fini(s);
 		return 1;

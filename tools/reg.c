@@ -102,29 +102,29 @@ static int reg_main(int ac, char *av[])
 	tool_init(&ac, &av, " - register a new mega.nz account", entries, 0);
 
 	if (opt_verify && opt_register) {
-		g_printerr("ERROR: You must specify either --register or --verify option\n");
+		tool_print_err("You must specify either --register or --verify option\n");
 		return 1;
 	}
 
 	if (opt_register) {
 		if (!opt_name) {
-			g_printerr("ERROR: You must specify name for your new mega.nz account\n");
+			tool_print_err("You must specify name for your new mega.nz account\n");
 			return 1;
 		}
 
 		if (!opt_email) {
-			g_printerr("ERROR: You must specify email for your new mega.nz account\n");
+			tool_print_err("You must specify email for your new mega.nz account\n");
 			return 1;
 		}
 
 		if (!opt_password) {
-			g_printerr("ERROR: You must specify password for your new mega.nz account\n");
+			tool_print_err("You must specify password for your new mega.nz account\n");
 			return 1;
 		}
 
 	} else if (opt_verify) {
 		if (ac != 2) {
-			g_printerr("ERROR: You must specify signup key and a link from the verification email\n");
+			tool_print_err("You must specify signup key and a link from the verification email\n");
 			return 1;
 		}
 
@@ -135,19 +135,18 @@ static int reg_main(int ac, char *av[])
 		g_assert(r != NULL);
 
 		if (!g_regex_match(r, av[1], 0, &m)) {
-			g_printerr("ERROR: Invalid verification link or key: '%s'\n", av[1]);
+			tool_print_err("Invalid verification link or key: '%s'\n", av[1]);
 			return 1;
 		}
 
 		signup_key = g_match_info_fetch(m, 1);
 		state = unserialize_reg_state(opt_verify);
 		if (!state) {
-			g_printerr(
-				"ERROR: Failed to decode registration state parameter, make sure you copied it correctly\n");
+			tool_print_err("Failed to decode registration state parameter, make sure you copied it correctly\n");
 			return 1;
 		}
 	} else {
-		g_printerr("ERROR: You must specify either --register or --verify option\n");
+		tool_print_err("You must specify either --register or --verify option\n");
 		return 1;
 	}
 
@@ -159,7 +158,7 @@ static int reg_main(int ac, char *av[])
 
 	if (opt_register) {
 		if (!mega_session_register(s, opt_email, opt_password, opt_name, &state, &local_err)) {
-			g_printerr("ERROR: Registration failed: %s\n",
+			tool_print_err("Registration failed: %s\n",
 				   local_err ? local_err->message : "Unknown error");
 			goto err;
 		}
@@ -177,7 +176,7 @@ static int reg_main(int ac, char *av[])
 
 	if (opt_verify) {
 		if (!mega_session_register_verify(s, state, signup_key, &local_err)) {
-			g_printerr("ERROR: Verification failed: %s\n",
+			tool_print_err("Verification failed: %s\n",
 				   local_err ? local_err->message : "Unknown error");
 			goto err;
 		}

@@ -31,7 +31,7 @@ static int mkdir_main(int ac, char *av[])
 	tool_init(&ac, &av, "- create directories at mega.nz", entries, TOOL_INIT_AUTH);
 
 	if (ac < 2) {
-		g_printerr("ERROR: No directories specified!\n");
+		tool_print_err("No directories specified!\n");
 		tool_fini(NULL);
 		return 1;
 	}
@@ -47,7 +47,7 @@ static int mkdir_main(int ac, char *av[])
 		gc_free gchar *path = tool_convert_filename(av[i], FALSE);
 
 		if (!mega_session_mkdir(s, path, &local_err)) {
-			g_printerr("ERROR: Can't create directory %s: %s\n", path, local_err->message);
+			tool_print_err("Can't create directory %s: %s\n", path, local_err->message);
 			g_clear_error(&local_err);
 			status = 1;
 		}

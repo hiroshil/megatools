@@ -60,13 +60,13 @@ static int get_main(int ac, char *av[])
 		opt_noprogress = opt_stream = TRUE;
 
 	if (ac < 2) {
-		g_printerr("ERROR: No files specified for download!\n");
+		tool_print_err("No files specified for download!\n");
 		tool_fini(NULL);
 		return 1;
 	}
 
 	if (opt_stream && ac != 2) {
-		g_printerr("ERROR: Can't stream from multiple files!\n");
+		tool_print_err("Can't stream from multiple files!\n");
 		tool_fini(NULL);
 		return 1;
 	}
@@ -84,12 +84,12 @@ static int get_main(int ac, char *av[])
 	if (opt_stream) {
 		struct mega_node *n = mega_session_stat(s, av[1]);
 		if (!n) {
-			g_printerr("ERROR: Remote file not found: %s", av[1]);
+			tool_print_err("Remote file not found: %s", av[1]);
 			return FALSE;
 		}
 
 		if (!mega_session_get(s, NULL, n, &local_err)) {
-			g_printerr("ERROR: Download failed for '%s': %s\n", av[1], local_err->message);
+			tool_print_err("Download failed for '%s': %s\n", av[1], local_err->message);
 			g_clear_error(&local_err);
 			status = 1;
 		}
@@ -105,13 +105,13 @@ static int get_main(int ac, char *av[])
 		if (!mega_session_get_compat(s, opt_path, path, &local_err)) {
 			if (!opt_noprogress && tool_is_stdout_tty())
 				g_print("\r" ESC_CLREOL "\n");
-			g_printerr("ERROR: Download failed for '%s': %s\n", path, local_err->message);
+			tool_print_err("Download failed for '%s': %s\n", path, local_err->message);
 			g_clear_error(&local_err);
 			status = 1;
 		} else {
 			if (!opt_noprogress && tool_is_stdout_tty())
 				g_print("\r" ESC_CLREOL);
-			g_print("Downloaded %s\n", cur_file);
+			tool_print_info("Downloaded %s\n", cur_file);
 		}
 	}
 

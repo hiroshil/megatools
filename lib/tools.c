@@ -487,8 +487,7 @@ gchar *tool_convert_filename(const gchar *path, gboolean local)
 #endif
 
 	if (locale_path == NULL) {
-		g_printerr(
-			"ERROR: Invalid filename locale, can't convert file names specified on the command line to UTF-8.\n");
+		tool_print_err("Invalid filename locale, can't convert file names specified on the command line to UTF-8.\n");
 		exit(1);
 	}
 
@@ -536,7 +535,7 @@ void tool_init(gint *ac, gchar ***av, const gchar *tool_name, GOptionEntry *tool
 
 		if (opt_config) {
 			if (!g_key_file_load_from_file(kf, opt_config, 0, &local_err)) {
-				g_printerr("ERROR: Failed to open config file: %s: %s\n", opt_config,
+				tool_print_err("Failed to open config file: %s: %s\n", opt_config,
 					   local_err->message);
 				g_clear_error(&local_err);
 				exit(1);
@@ -568,7 +567,7 @@ void tool_init(gint *ac, gchar ***av, const gchar *tool_name, GOptionEntry *tool
 				download_seed_limit = upload_speed_limit =
 					g_key_file_get_integer(kf, "Network", "SpeedLimit", &local_err);
 				if (local_err) {
-					g_printerr("WARNING: Invalid speed limit set in the config file: %s\n",
+					tool_print_warn("Invalid speed limit set in the config file: %s\n",
 						   local_err->message);
 					g_clear_error(&local_err);
 				}
@@ -578,7 +577,7 @@ void tool_init(gint *ac, gchar ***av, const gchar *tool_name, GOptionEntry *tool
 				upload_speed_limit =
 					g_key_file_get_integer(kf, "Network", "UploadSpeedLimit", &local_err);
 				if (local_err) {
-					g_printerr("WARNING: Invalid upload speed limit set in the config file: %s\n",
+					tool_print_warn("Invalid upload speed limit set in the config file: %s\n",
 						   local_err->message);
 					g_clear_error(&local_err);
 				}
@@ -588,7 +587,7 @@ void tool_init(gint *ac, gchar ***av, const gchar *tool_name, GOptionEntry *tool
 				download_seed_limit =
 					g_key_file_get_integer(kf, "Network", "DownloadSpeedLimit", &local_err);
 				if (local_err) {
-					g_printerr("WARNING: Invalid download speed limit set in the config file: %s\n",
+					tool_print_warn("Invalid download speed limit set in the config file: %s\n",
 						   local_err->message);
 					g_clear_error(&local_err);
 				}
@@ -598,16 +597,14 @@ void tool_init(gint *ac, gchar ***av, const gchar *tool_name, GOptionEntry *tool
 				transfer_worker_count =
 					g_key_file_get_integer(kf, "Network", "ParallelTransfers", &local_err);
 				if (local_err) {
-					g_printerr(
-						"WARNING: Invalid number of parallel transfers set in the config file: %s\n",
+					tool_print_warn("Invalid number of parallel transfers set in the config file: %s\n",
 						local_err->message);
 					g_clear_error(&local_err);
 				}
 
 				if (transfer_worker_count < 1 || transfer_worker_count > 16) {
 					transfer_worker_count = CLAMP(transfer_worker_count, 1, 16);
-					g_printerr(
-						"WARNING: Invalid number of parallel transfers set in the config file, limited to %d\n",
+					tool_print_warn("Invalid number of parallel transfers set in the config file, limited to %d\n",
 						transfer_worker_count);
 				}
 			}
@@ -625,8 +622,7 @@ void tool_init(gint *ac, gchar ***av, const gchar *tool_name, GOptionEntry *tool
 			if (g_key_file_has_key(kf, "UI", "Colors", NULL) && tool_is_stdout_tty()) {
 				tool_use_colors = g_key_file_get_boolean(kf, "UI", "Colors", &local_err);
 				if (local_err) {
-					g_printerr(
-						"WARNING: Invalid value for UI.Colors set in the config file: %s\n",
+					tool_print_warn("Invalid value for UI.Colors set in the config file: %s\n",
 						local_err->message);
 					g_clear_error(&local_err);
 					tool_use_colors = FALSE;
@@ -659,7 +655,7 @@ void tool_init(gint *ac, gchar ***av, const gchar *tool_name, GOptionEntry *tool
 		else if (!strcmp(opt_ipproto, "any"))
 			http_ipproto = HTTP_IPPROTO_ANY;
 		else {
-			g_printerr("ERROR: Invalid --ip-proto option.\n");
+			tool_print_err("Invalid --ip-proto option.\n");
 			exit(1);
 		}
 	}
@@ -668,12 +664,12 @@ void tool_init(gint *ac, gchar ***av, const gchar *tool_name, GOptionEntry *tool
 		return;
 
 	if (!opt_username) {
-		g_printerr("ERROR: You must specify your mega.nz username (email)\n");
+		tool_print_err("You must specify your mega.nz username (email)\n");
 		exit(1);
 	}
 
 	if (!opt_password && opt_no_ask_password) {
-		g_printerr("ERROR: You must specify your mega.nz password\n");
+		tool_print_err("You must specify your mega.nz password\n");
 		exit(1);
 	}
 
@@ -705,7 +701,7 @@ struct mega_session *tool_start_session(ToolSessionFlags flags)
 		if (flags & TOOL_SESSION_AUTH_OPTIONAL)
 			return s;
 
-		g_printerr("ERROR: Authentication is required\n");
+		tool_print_err("Authentication is required\n");
 		goto err;
 	}
 
@@ -715,13 +711,13 @@ struct mega_session *tool_start_session(ToolSessionFlags flags)
 		g_clear_error(&local_err);
 
 		if (!mega_session_open(s, opt_username, opt_password, sid, &local_err)) {
-			g_printerr("ERROR: Can't login to mega.nz: %s\n", local_err->message);
+			tool_print_err("Can't login to mega.nz: %s\n", local_err->message);
 			goto err;
 		}
 
 		if (!(flags & TOOL_SESSION_AUTH_ONLY)) {
 			if (!mega_session_refresh(s, &local_err)) {
-				g_printerr("ERROR: Can't read filesystem info from mega.nz: %s\n", local_err->message);
+				tool_print_err("Can't read filesystem info from mega.nz: %s\n", local_err->message);
 				goto err;
 			}
 
@@ -733,7 +729,7 @@ struct mega_session *tool_start_session(ToolSessionFlags flags)
 
 	if (!(flags & TOOL_SESSION_AUTH_ONLY) && opt_reload_files && !loaded) {
 		if (!mega_session_refresh(s, &local_err)) {
-			g_printerr("ERROR: Can't read filesystem info from mega.nz: %s\n", local_err->message);
+			tool_print_err("Can't read filesystem info from mega.nz: %s\n", local_err->message);
 			goto err;
 		}
 

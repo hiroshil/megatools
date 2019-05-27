@@ -63,7 +63,7 @@ static int df_main(int ac, char *av[])
 		opts_used += opt_used ? 1 : 0;
 
 		if (opts_used > 1) {
-			g_printerr("ERROR: Options conflict, you should use either --total, --used, or --free.\n");
+			tool_print_err("Options conflict, you should use either --total, --used, or --free.\n");
 			return 1;
 		}
 	}
@@ -75,7 +75,7 @@ static int df_main(int ac, char *av[])
 		opts_used += opt_gb ? 1 : 0;
 
 		if (opts_used > 1) {
-			g_printerr("ERROR: Options conflict, you should use either --human, --mb, or --gb.\n");
+			tool_print_err("Options conflict, you should use either --human, --mb, or --gb.\n");
 			return 1;
 		}
 	}
@@ -88,7 +88,7 @@ static int df_main(int ac, char *av[])
 
 	struct mega_user_quota *q = mega_session_user_quota(s, &local_err);
 	if (!q) {
-		g_printerr("ERROR: Can't determine disk usage: %s\n", local_err->message);
+		tool_print_err("Can't determine disk usage: %s\n", local_err->message);
 		g_clear_error(&local_err);
 		goto err;
 	}
