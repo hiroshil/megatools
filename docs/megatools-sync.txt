@@ -9,8 +9,8 @@ megatools sync - Synchronize a local folder with a remote mega.nz folder
 SYNOPSIS
 --------
 [verse]
-'megatools sync' [-n] [--force] [--delete] [--no-progress] --local <path> --remote <remotepath>
-'megatools sync' [-n] [--force] [--delete] [--no-progress] --download --local <path> --remote <remotepath>
+'megatools sync' [-n] [--force] [--delete] [--delete-only] [--no-progress] --local <path> --remote <remotepath>
+'megatools sync' [-n] [--force] [--delete] [--delete-only] [--no-progress] --download --local <path> --remote <remotepath>
 
 
 DESCRIPTION
@@ -29,6 +29,10 @@ files, you have to add `--download` option.
 Empty folders on Mega are not downloaded. Local symbolic links will not be
 followed during upload. Files with a length of 0 bytes are not uploaded because
 Mega doesn't support them.
+
+The --delete option removes files and folders on the target that are not present
+in the source location. The --delete-only option removes these files without
+copying anything. This is useful if you want to free space on Mega before a sync.
 
 If you make modifications on Mega it is possible that the local megatools cache
 does not immediately reflect the changes. To make sure that you always operate
@@ -87,6 +91,9 @@ OPTIONS
 --delete::
 	Delete files and folders in a target directory that are not present in
 	the source directory.
+
+--delete-only::
+	Same as --delete but does not copy files. Use to free unused storage space.
 
 --force::
 	Overwrites folders in a target directory if the source is a regular
