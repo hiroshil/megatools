@@ -9,8 +9,8 @@ megatools sync - Synchronize a local folder with a remote mega.nz folder
 SYNOPSIS
 --------
 [verse]
-'megatools sync' [-n] [--force] [--delete] [--delete-only] [--no-progress] --local <path> --remote <remotepath>
-'megatools sync' [-n] [--force] [--delete] [--delete-only] [--no-progress] --download --local <path> --remote <remotepath>
+'megatools sync' [-n] [--force] [--no-progress] [--delete] [--delete-only] [--ignore-errors] --local <path> --remote <remotepath>
+'megatools sync' [-n] [--force] [--no-progress] [--delete] [--delete-only] [--ignore-errors] --download --local <path> --remote <remotepath>
 
 
 DESCRIPTION
@@ -30,9 +30,12 @@ Empty folders on Mega are not downloaded. Local symbolic links will not be
 followed during upload. Files with a length of 0 bytes are not uploaded because
 Mega doesn't support them.
 
-The --delete option removes files and folders on the target that are not present
-in the source location. The --delete-only option removes these files without
+The `--delete` option removes files and folders on the target that are not present
+in the source location. The `--delete-only` option removes these files without
 copying anything. This is useful if you want to free space on Mega before a sync.
+
+The default behavior when an error occurs is to exit the program. To continue
+processing in case of errors use the `--ignore-errors` option.
 
 If you make modifications on Mega it is possible that the local megatools cache
 does not immediately reflect the changes. To make sure that you always operate

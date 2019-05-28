@@ -32,6 +32,7 @@ static gboolean opt_download;
 static gboolean opt_noprogress;
 static gboolean opt_dryrun;
 static gboolean opt_force;
+static gboolean opt_ignore_errors;
 static struct mega_session *s;
 
 static int files_processed;
@@ -39,7 +40,6 @@ static int files_with_errors;
 static int folders_processed;
 static int elements_deleted;
 static long int bytes_transferred;
-static clock_t start, end;
 
 static GOptionEntry entries[] = {
 	{ "remote", 'r', 0, G_OPTION_ARG_STRING, &opt_remote_path, "Remote directory", "PATH" },
@@ -50,6 +50,7 @@ static GOptionEntry entries[] = {
 	{ "no-progress", '\0', 0, G_OPTION_ARG_NONE, &opt_noprogress, "Disable progress bar", NULL },
 	{ "dryrun", 'n', 0, G_OPTION_ARG_NONE, &opt_dryrun, "Don't perform any actual changes", NULL },
 	{ "force", '\0', 0, G_OPTION_ARG_NONE, &opt_force, "Overwrite directories on target with files", NULL },
+	{ "ignore-errors", '\0', 0, G_OPTION_ARG_NONE, &opt_ignore_errors, "Ignore errors and continue with the next operation", NULL },
 	{ NULL }
 };
 
@@ -65,6 +66,8 @@ static void status_callback(struct mega_status_data *data, gpointer userdata)
 
 static gboolean up_sync_file(GFile *root, GFile *file, const gchar *remote_path)
 {
+	// FALSE signals an error to the caller
+	
 	GError *local_err = NULL;
 	gc_free gchar *local_path = g_file_get_path(file);
 
@@ -79,7 +82,7 @@ static gboolean up_sync_file(GFile *root, GFile *file, const gchar *remote_path)
 
 	if (st.st_size <= 0) {
 		tool_print_debug("Ignoring empty file %s\n", local_path);
-		return FALSE;
+		return TRUE;
 	}
 
 	struct mega_node *node = mega_session_stat(s, remote_path);
@@ -115,7 +118,7 @@ static gboolean up_sync_file(GFile *root, GFile *file, const gchar *remote_path)
 
 		if (!do_upload) {
 			tool_print_debug("File %s appears identical, skipping\n", local_path);
-			return FALSE;
+			return TRUE;
 		}
 
 		tool_print_info("R %s\n", remote_path);
@@ -232,22 +235,27 @@ static gboolean up_sync_dir(GFile *root, GFile *file, const gchar *remote_path)
 
 		if (type == G_FILE_TYPE_DIRECTORY) {
 			if (!up_sync_dir(root, child, child_remote_path))
-				status = FALSE;
+				status = opt_ignore_errors;
 		} else if (type == G_FILE_TYPE_REGULAR) {
 			if (!opt_delete_only)
 				if (!up_sync_file(root, child, child_remote_path))
-					status = FALSE;
+					status = opt_ignore_errors;
 		} else {
 			gc_free gchar* child_path = g_file_get_path(child);
 			tool_print_warn("Skipping special file %s\n", child_path);
 		}
 
 		g_object_unref(i);
+		
+		if (!status)
+			break;
 	}
 
-	if (opt_delete) {
+	GList *to_delete = NULL;
+	if (opt_delete && status) {
 		// get leftovers on remote
-		GList *to_delete = g_hash_table_get_keys(hash_table), *i;
+		to_delete = g_hash_table_get_keys(hash_table);
+		GList *i;
 		for (i = to_delete; i; i = i->next) {
 			struct mega_node *n = (struct mega_node *)g_hash_table_lookup(hash_table, i->data);
 			if (n) {
@@ -260,15 +268,20 @@ static gboolean up_sync_dir(GFile *root, GFile *file, const gchar *remote_path)
 						tool_print_err("Can't remove %s: %s\n", node_path,
 							local_err->message);
 						g_clear_error(&local_err);
-						status = FALSE;
+						status = opt_ignore_errors;
 					} else
 						elements_deleted++;
 				}
 			} else {
 				tool_print_err("no node found for file name: %s\n", (char *)i->data);
 			}
+			
+			if (!status)
+				break;
 		}
-
+	}
+	
+	if (opt_delete) {
 		g_list_free(to_delete);
 		g_slist_free(remote_children);
 		g_hash_table_destroy(hash_table);
@@ -370,7 +383,7 @@ static gboolean dl_sync_file(struct mega_node *node, GFile *file, const gchar *r
 
 		if (!do_download) {
 			tool_print_debug("File %s appears identical, skipping\n", remote_path);
-			return FALSE;
+			return TRUE;
 		}
 
 		tool_print_info("R %s\n", local_path);
@@ -527,18 +540,23 @@ static gboolean dl_sync_dir(struct mega_node *node, GFile *file, const gchar *re
 		if (child->type == MEGA_NODE_FILE) {
 			if (!opt_delete_only)
 				if (!dl_sync_file(child, child_file, child_remote_path))
-					status = FALSE;
+					status = opt_ignore_errors;
 		} else {
 			if (!dl_sync_dir(child, child_file, child_remote_path))
-				status = FALSE;
+				status = opt_ignore_errors;
 		}
+		
+		if (!status)
+			break;
 	}
 
 	g_slist_free(children);
 
-	if (check_delete) {
+	GList *to_delete = NULL;
+	if (check_delete && status) {
 		// get local leftovers
-		GList *to_delete = g_hash_table_get_keys(hash_table), *i;
+		to_delete = g_hash_table_get_keys(hash_table);
+		GList *i;
 		for (i = to_delete; i; i = i->next) {
 			fi = (GFileInfo *)g_hash_table_lookup(hash_table, i->data);
 			if (fi) {
@@ -555,7 +573,7 @@ static gboolean dl_sync_dir(struct mega_node *node, GFile *file, const gchar *re
 							tool_print_err("Can't delete local directory %s: %s\n",
 								local_file, local_err->message);
 							g_clear_error(&local_err);
-							status = FALSE;
+							status = opt_ignore_errors;
 						} else
 							elements_deleted++;
 					} else if (type == G_FILE_TYPE_REGULAR) {
@@ -563,7 +581,7 @@ static gboolean dl_sync_dir(struct mega_node *node, GFile *file, const gchar *re
 							tool_print_err("Can't delete local file %s: %s\n",
 								local_file, local_err->message);
 							g_clear_error(&local_err);
-							status = FALSE;
+							status = opt_ignore_errors;
 						} else
 							elements_deleted++;
 					} else
@@ -573,8 +591,13 @@ static gboolean dl_sync_dir(struct mega_node *node, GFile *file, const gchar *re
 			} else {
 				tool_print_err("no info found for file name: %s\n", (char *)i->data);
 			}
+			
+			if (!status)
+				break;
 		}
-
+	}
+	
+	if (check_delete) {
 		// free memory
 		g_list_free(to_delete);
 		g_hash_table_destroy(hash_table);
@@ -589,6 +612,7 @@ static int sync_main(int ac, char *av[])
 {
 	gc_object_unref GFile *local_file = NULL;
 	gint status = 1;
+	clock_t start, end;
 
 	tool_init(&ac, &av, "- synchronize a local directory with a remote one", entries,
 			TOOL_INIT_AUTH | TOOL_INIT_UPLOAD_OPTS | TOOL_INIT_DOWNLOAD_OPTS);
@@ -639,13 +663,13 @@ static int sync_main(int ac, char *av[])
 	}
 
 	end = clock();
-	int duration_s = ((double)(end - start)) / CLOCKS_PER_SEC;
+	long int duration_s = ((double)(end - start)) / CLOCKS_PER_SEC;
 	int avg_bytes_per_s = duration_s == 0 ? -1 : ((double)bytes_transferred) / duration_s;
 
 	tool_print_info("Processed %d file(s) in %d folder(s). %d file(s) had errors.\n", files_processed, folders_processed, files_with_errors);
 	if (elements_deleted > 0)
 		tool_print_info("Deleted %d file(s) or folder(s).\n", elements_deleted);
-	tool_print_info("Transferred %lu bytes in %d second(s) (avg. %d bytes/s).\n", bytes_transferred, duration_s, avg_bytes_per_s);
+	tool_print_info("Transferred %lu bytes in %lu second(s) (avg. %d bytes/s).\n", bytes_transferred, duration_s, avg_bytes_per_s);
 
 	if (files_with_errors > 0)
 		tool_print_info("One or more error(s) occurred. Please see previous output.\n");
@@ -660,8 +684,8 @@ const struct shell_tool shell_tool_sync = {
 	.name = "sync",
 	.main = sync_main,
 	.usages = (char *[]){
-		"[-n] [--force] [--no-progress] [--delete] [--delete-only] --local <path> --remote <remotepath>",
-		"[-n] [--force] [--no-progress] [--delete] [--delete-only] --download --local <path> --remote <remotepath>",
+		"[-n] [--force] [--no-progress] [--delete] [--delete-only] [--ignore-errors] --local <path> --remote <remotepath>",
+		"[-n] [--force] [--no-progress] [--delete] [--delete-only] [--ignore-errors] --download --local <path> --remote <remotepath>",
 		NULL
 	},
 };
