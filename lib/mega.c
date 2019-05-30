@@ -4102,7 +4102,7 @@ struct mega_node *mega_session_put(struct mega_session *s, struct mega_node *par
 	// setup encryption
 	gc_free guchar *aes_key = make_random_key();
 	gc_free guchar *nonce = make_random_key();
-	guchar meta_mac[16];
+	guchar meta_mac[16] = {0};
 	int retries = 3;
 	gboolean transfer_ok;
 
