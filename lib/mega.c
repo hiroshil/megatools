@@ -3292,7 +3292,8 @@ static void tman_worker_upload_chunk(struct transfer_chunk *c, struct transfer_w
 	// perform encryption and chunk mac calculation
 	guchar iv[AES_BLOCK_SIZE] = { 0 };
 	memcpy(iv, t->nonce, 8);
-	*((guint64 *)&iv[8]) = GUINT64_TO_BE((guint64)(c->offset / 16)); // this is ok, because chunks are 16b aligned
+	guint64 iv1 = GUINT64_TO_BE((guint64)(c->offset / 16)); // this is ok, because chunks are 16b aligned
+	memcpy(iv + 8, &iv1, 8);
 
 	for (int i = 0; i < c->n_macs; i++)
 		chunk_mac_calculate(t->nonce, t->file_key, buf + c->macs[i].off, c->macs[i].size, c->macs[i].mac);
