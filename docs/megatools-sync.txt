@@ -9,15 +9,15 @@ megatools sync - Synchronize a local folder with a remote mega.nz folder
 SYNOPSIS
 --------
 [verse]
-'megatools sync' [-n] [--force] [--no-progress] [--delete] [--delete-only] [--ignore-errors] --local <path> --remote <remotepath>
-'megatools sync' [-n] [--force] [--no-progress] [--delete] [--delete-only] [--ignore-errors] --download --local <path> --remote <remotepath>
+'megatools sync' [-n] [--force] [--no-progress] [--delete] [--delete-only | --always] [--ignore-errors] --local <path> --remote <remotepath>
+'megatools sync' [-n] [--force] [--no-progress] [--delete] [--delete-only | --always] [--ignore-errors] --download --local <path> --remote <remotepath>
 
 
 DESCRIPTION
 -----------
 
 Synchronizes remote and local directories. Files are overwritten if their size
-or modification time is different.
+or modification time is different, unless the `-a` (or `--always`) option is on.
 
 Directories are only overwritten by files if the `--force` option is specified.
 Use this option with caution. Files are always overwritten by a directory with
@@ -33,6 +33,7 @@ Mega doesn't support them.
 The `--delete` option removes files and folders on the target that are not present
 in the source location. The `--delete-only` option removes these files without
 copying anything. This is useful if you want to free space on Mega before a sync.
+`--delete-only` and `--always` cannot be used together.
 
 The default behavior when an error occurs is to exit the program. To continue
 processing in case of errors use the `--ignore-errors` option.
@@ -52,12 +53,12 @@ timestamped.
 
 If an existing file is to be uploaded 'sync' compares the file sizes of the
 local and remote versions. If they are the same the timestamp is compared. If
-there are differences the file is transferred.
+there are differences the file is transferred (or if `-a` or `--always` is on).
 
 If the local timestamp on Mega is missing, for example when a file has been
 uploaded using software other than megatools, 'sync' will use the upload
 timestamp for the comparison. This makes sure that files that have been uploaded
-to Mega using other software will not be synchronized more than once.
+to Mega using other software will not be synchronized downwards more than once.
 
 When a file is downloaded 'sync' will set its modification date on the local
 file system to the timestamp obtained from Mega. The 'copy' and 'get' tools will
@@ -67,6 +68,13 @@ therefore best to use 'sync' exclusively.
 Please note that copying a file using the Mega web application will also copy
 the local timestamp if available. When downloading this file with 'sync' the
 file modification time will be the same as the original file's.
+
+`sync` (as well as `copy` and `put`) will upload and store extended file 
+attributes in the "_MT_XAT" custom attribute if the file system supports them.
+`sync` will try to apply them to the files when downloading, however, `copy`
+and `get` will not. The attributes will also be copied when copying in the 
+Mega web application. This may cause problems if the attribute data is
+expected to be consistent with the file name by other tools, so best avoid this.
 
 
 OPTIONS
@@ -88,8 +96,10 @@ OPTIONS
 --dryrun::
 	Don't perform any actual changes, just print what would be done.
 
---no-progress::
-	Disable upload progress reporting.
+-a::
+--always::
+	Always copy files and folders independent of size and timestamp.
+	This option cannot be used with --delete-only.
 
 --delete::
 	Delete files and folders in a target directory that are not present in
@@ -97,6 +107,7 @@ OPTIONS
 
 --delete-only::
 	Same as --delete but does not copy files. Use to free unused storage space.
+	Cannot be used with --always.
 
 --force::
 	Overwrites folders in a target directory if the source is a regular
@@ -104,6 +115,9 @@ OPTIONS
 	the target folder. Files that are to be replaced by a folder are always
 	removed before the folder is being synchronized. Use this option with
 	caution.
+
+--no-progress::
+	Disable upload progress reporting.
 
 include::upload-options.txt[]
 include::download-options.txt[]

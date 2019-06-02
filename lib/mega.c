@@ -29,6 +29,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <time.h>
+#include <sys/xattr.h>
 #include <openssl/aes.h>
 #include <openssl/modes.h>
 #include <openssl/bn.h>
@@ -1278,7 +1279,7 @@ static gchar *encode_node_attrs(const gchar *name)
 // }}}
 // {{{ encode_node_attrs
 
-static gchar *encode_node_attrs_ts(const gchar *name, const gchar *local_ts)
+static gchar *encode_node_attrs_ts(const gchar *name, const gchar *local_ts, const gchar *xattrs)
 {
 	g_return_val_if_fail(name != NULL, NULL);
 
@@ -1287,6 +1288,8 @@ static gchar *encode_node_attrs_ts(const gchar *name, const gchar *local_ts)
 	s_json_gen_member_string(gen, "n", name);
 	if (local_ts)
 		s_json_gen_member_string(gen, "_MT_LTS", local_ts);
+	if (xattrs)
+		s_json_gen_member_string(gen, "_MT_XAT", xattrs);
 	s_json_gen_end_object(gen);
 	gc_free gchar *attrs_json = s_json_gen_done(gen);
 
@@ -1296,7 +1299,7 @@ static gchar *encode_node_attrs_ts(const gchar *name, const gchar *local_ts)
 // }}}
 // {{{ decode_node_attrs
 
-static gboolean decode_node_attrs(const gchar *attrs, gchar **name, gchar **local_ts)
+static gboolean decode_node_attrs(const gchar *attrs, gchar **name, gchar **local_ts, gchar **xattrs)
 {
 	g_return_val_if_fail(attrs != NULL, FALSE);
 	g_return_val_if_fail(name != NULL, FALSE);
@@ -1311,6 +1314,7 @@ static gboolean decode_node_attrs(const gchar *attrs, gchar **name, gchar **loca
 
 	*name = s_json_get_member_string(attrs + 4, "n");
 	*local_ts = s_json_get_member_string(attrs + 4, "_MT_LTS");
+	*xattrs = s_json_get_member_string(attrs + 4, "_MT_XAT");
 
 	return TRUE;
 }
@@ -1318,7 +1322,7 @@ static gboolean decode_node_attrs(const gchar *attrs, gchar **name, gchar **loca
 // }}}
 // {{{ decrypt_node_attrs
 
-static gboolean decrypt_node_attrs(const gchar *encrypted_attrs, const guchar *key, gchar **name, gchar **local_ts)
+static gboolean decrypt_node_attrs(const gchar *encrypted_attrs, const guchar *key, gchar **name, gchar **local_ts, gchar **xattrs)
 {
 	g_return_val_if_fail(encrypted_attrs != NULL, FALSE);
 	g_return_val_if_fail(key != NULL, FALSE);
@@ -1326,7 +1330,7 @@ static gboolean decrypt_node_attrs(const gchar *encrypted_attrs, const guchar *k
 
 	gc_free guchar *attrs = b64_aes128_cbc_decrypt(encrypted_attrs, key, NULL);
 
-	return decode_node_attrs(attrs, name, local_ts);
+	return decode_node_attrs(attrs, name, local_ts, xattrs);
 }
 
 // }}}
@@ -1995,7 +1999,8 @@ static struct mega_node *mega_node_parse(struct mega_session *s, const gchar *no
 
 	gc_free gchar *node_name = NULL;
 	gc_free gchar *node_local_ts = NULL;
-	if (!decrypt_node_attrs(node_a, aes_key, &node_name, &node_local_ts)) {
+	gc_free gchar *node_xattrs = NULL;
+	if (!decrypt_node_attrs(node_a, aes_key, &node_name, &node_local_ts, &node_xattrs)) {
 		tool_print_warn("Skipping FS node %s because it has malformed attributes\n", node_h);
 		return NULL;
 	}
@@ -2043,6 +2048,7 @@ static struct mega_node *mega_node_parse(struct mega_session *s, const gchar *no
 			n->local_ts = 0;
 	} else
 		n->local_ts = 0;
+	n->xattrs = TAKE(node_xattrs);
 
 	return n;
 }
@@ -2104,6 +2110,10 @@ static void mega_node_free(struct mega_node *n)
 		g_free(n->user_handle);
 		g_free(n->su_handle);
 		g_free(n->key);
+		if (n->xattrs != NULL) {
+			memset(n->xattrs, 0, strlen(n->xattrs));
+			free(n->xattrs);
+		}
 		g_free(n->link);
 		memset(n, 0, sizeof(struct mega_node));
 		g_free(n);
@@ -4146,7 +4156,36 @@ try_again:
 	if (!g_stat(local_path, &st))
 		local_ts = g_strdup_printf("%lu", st.st_mtime);
 
-	gc_free gchar *attrs = encode_node_attrs_ts(remote_name, local_ts);
+	// store extended file attributes
+	gc_free gchar *xattrs = NULL;
+	#define XATTR_MAX_SIZE	65535
+	char xattr_list[XATTR_MAX_SIZE];
+	char xattr_value[XATTR_MAX_SIZE];
+	ssize_t list_len = listxattr(local_path, xattr_list, XATTR_MAX_SIZE);
+	if (list_len > 0) {
+		// serialize extended attributes as json
+		SJsonGen *gen = s_json_gen_new();
+		s_json_gen_start_object(gen);
+		s_json_gen_member_array(gen, "xattrs");
+
+		int li;
+		for (li = 0; li < list_len; li += strlen(&xattr_list[li]) + 1) {
+			ssize_t value_len = getxattr(local_path, &xattr_list[li], xattr_value, XATTR_MAX_SIZE);
+			if (value_len > -1) {
+				s_json_gen_start_object(gen);
+				s_json_gen_member_string(gen, "n", &xattr_list[li]);	// xattr name
+				gc_free gchar* value_encoded = g_base64_encode(xattr_value, value_len);
+				s_json_gen_member_string(gen, "v", value_encoded);		// xattr value as base64
+				s_json_gen_end_object(gen);
+			}
+		}
+
+		s_json_gen_end_array(gen);
+		s_json_gen_end_object(gen);
+		xattrs = s_json_gen_done(gen);
+	}
+
+	gc_free gchar *attrs = encode_node_attrs_ts(remote_name, local_ts, xattrs);
 	gc_free gchar *attrs_enc = b64_aes128_cbc_encrypt_str(attrs, aes_key);
 
 	guchar node_key[32];
@@ -4648,7 +4687,7 @@ gboolean mega_session_dl_prepare(struct mega_session *s, struct mega_download_da
 				 const gchar *key, GError **err)
 {
 	GError *local_err = NULL;
-	gc_free gchar *node_name = NULL, *dl_node = NULL, *url = NULL, *at = NULL, *node_local_ts = NULL;
+	gc_free gchar *node_name = NULL, *dl_node = NULL, *url = NULL, *at = NULL, *node_local_ts = NULL, *node_xattrs = NULL;
 	gc_free guchar *node_key = NULL;
 
 	g_return_val_if_fail(s != NULL, FALSE);
@@ -4695,7 +4734,7 @@ gboolean mega_session_dl_prepare(struct mega_session *s, struct mega_download_da
 	unpack_node_key(node_key, aes_key, NULL, NULL);
 
 	// decrypt attributes with aes_key
-	if (!decrypt_node_attrs(at, aes_key, &node_name, &node_local_ts)) {
+	if (!decrypt_node_attrs(at, aes_key, &node_name, &node_local_ts, &node_xattrs)) {
 		g_set_error(err, MEGA_ERROR, MEGA_ERROR_OTHER, "Invalid key");
 		return FALSE;
 	}
@@ -4936,6 +4975,7 @@ gboolean mega_session_save(struct mega_session *s, GError **err)
 		s_json_gen_member_int(gen, "size", n->size);
 		s_json_gen_member_int(gen, "timestamp", n->timestamp);
 		s_json_gen_member_int(gen, "local_ts", n->local_ts);
+		s_json_gen_member_string(gen, "xattrs", n->xattrs);
 		s_json_gen_member_string(gen, "link", n->link);
 		s_json_gen_end_object(gen);
 	}
@@ -5092,6 +5132,8 @@ gboolean mega_session_load(struct mega_session *s, const gchar *un, const gchar 
 				n->timestamp = s_json_get_int(v, 0);
 			else if (s_json_string_match(k, "local_ts"))
 				n->local_ts = s_json_get_int(v, 0);
+			else if (s_json_string_match(k, "xattrs"))
+				n->xattrs = s_json_get_string(v);
 			else if (s_json_string_match(k, "link"))
 				n->link = s_json_get_string(v);
 			S_JSON_FOREACH_END()

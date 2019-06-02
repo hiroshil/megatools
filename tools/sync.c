@@ -20,12 +20,16 @@
  */
 #include <sys/types.h>
 #include <utime.h>
+#include <sys/xattr.h>
+#include <errno.h>
 
 #include "tools.h"
 #include "shell.h"
+#include "sjson.h"
 
 static gchar *opt_remote_path;
 static gchar *opt_local_path;
+static gboolean opt_always;
 static gboolean opt_delete;
 static gboolean opt_delete_only;
 static gboolean opt_download;
@@ -44,6 +48,7 @@ static long int bytes_transferred;
 static GOptionEntry entries[] = {
 	{ "remote", 'r', 0, G_OPTION_ARG_STRING, &opt_remote_path, "Remote directory", "PATH" },
 	{ "local", 'l', 0, G_OPTION_ARG_STRING, &opt_local_path, "Local directory", "PATH" },
+	{ "always", 'a', 0, G_OPTION_ARG_NONE, &opt_always, "Always overwrite files on target", NULL},
 	{ "delete", '\0', 0, G_OPTION_ARG_NONE, &opt_delete, "Delete missing files on target", NULL },
 	{ "delete-only", '\0', 0, G_OPTION_ARG_NONE, &opt_delete_only, "Only delete missing files on target, do not copy", NULL },
 	{ "download", 'd', 0, G_OPTION_ARG_NONE, &opt_download, "Download files from mega", NULL },
@@ -96,24 +101,23 @@ static gboolean up_sync_file(GFile *root, GFile *file, const gchar *remote_path)
 
 		// if the local timestamp is not available, fall back to the upload timestamp
 		glong timestamp = node->local_ts > 0 ? node->local_ts : node->timestamp;
-		gboolean do_upload = FALSE;
+
+		gboolean do_upload = opt_always;
 
 		// size check
-		if (node->size != st.st_size) {
+		if (!do_upload && node->size != st.st_size) {
 			do_upload = TRUE;
 
 			tool_print_debug("File %s: sizes differ\n", local_path);
 		}
 
 		// timestamp check
-		if (!do_upload) {
-			if (st.st_mtime != timestamp) {
-				do_upload = TRUE;
+		if (!do_upload && st.st_mtime != timestamp) {
+			do_upload = TRUE;
 
-				tool_print_debug("File %s: timestamp mismatch\n", local_path);
-				tool_print_debug("  Local file timestamp is: %lu\n", st.st_mtime);
-				tool_print_debug("  Remote timestamp is: %lu\n", timestamp);
-			}
+			tool_print_debug("File %s: timestamp mismatch\n", local_path);
+			tool_print_debug("  Local file timestamp is: %lu\n", st.st_mtime);
+			tool_print_debug("  Remote timestamp is: %lu\n", timestamp);
 		}
 
 		if (!do_upload) {
@@ -356,24 +360,22 @@ static gboolean dl_sync_file(struct mega_node *node, GFile *file, const gchar *r
 			return FALSE;
 		}
 
-		gboolean do_download = FALSE;
+		gboolean do_download = opt_always;
 
 		GStatBuf st;
 		if (!g_stat(local_path, &st)) {
 			// size check
-			if (node->size != st.st_size) {
+			if (!do_download && node->size != st.st_size) {
 				do_download = TRUE;
 				tool_print_debug("File %s: sizes differ\n", remote_path);
 			}
 
 			// timestamp check
-			if (!do_download) {
-				if (st.st_mtime != timestamp) {
-					do_download = TRUE;
-					tool_print_debug("File %s: timestamp mismatch\n", remote_path);
-					tool_print_debug("  Local file timestamp is: %lu\n", st.st_mtime);
-					tool_print_debug("  Remote timestamp is: %lu\n", timestamp);
-				}
+			if (!do_download && st.st_mtime != timestamp) {
+				do_download = TRUE;
+				tool_print_debug("File %s: timestamp mismatch\n", remote_path);
+				tool_print_debug("  Local file timestamp is: %lu\n", st.st_mtime);
+				tool_print_debug("  Remote timestamp is: %lu\n", timestamp);
 			}
 		} else {
 			tool_print_err("Unable to stat %s\n", local_path);
@@ -430,7 +432,41 @@ static gboolean dl_sync_file(struct mega_node *node, GFile *file, const gchar *r
 			timbuf.actime = timestamp;
 			timbuf.modtime = timestamp;
 			if (utime(local_path, &timbuf)) {
-				tool_print_warn("Failed to set file times on %s\n", local_path);
+				tool_print_warn("Failed to set file times on %s: %s\n", local_path, g_strerror(errno));
+			}
+		}
+
+		// set extended attributes if available
+		if (node->xattrs) {
+			const gchar *xattrs_node = s_json_get_member(node->xattrs, "xattrs");
+			if (xattrs_node && s_json_get_type(xattrs_node) == S_JSON_TYPE_ARRAY) {
+				gc_free gchar** f_elems = s_json_get_elements(xattrs_node);
+				gchar** f_elem = f_elems;
+
+				while (*f_elem) {
+					if (s_json_get_type(*f_elem) == S_JSON_TYPE_OBJECT) {
+						gc_free gchar *xattr_name = s_json_get_member_string(*f_elem, "n");
+						if (xattr_name && strlen(xattr_name) > 0) {
+							gc_free gchar *xattr_value_encoded = s_json_get_member_string(*f_elem, "v");
+							gsize value_len;
+							guchar* xattr_value = g_base64_decode(xattr_value_encoded, &value_len);
+
+							if (setxattr(local_path, xattr_name, xattr_value, value_len, 0)) {
+								// ignore this error if the file system does not support extended attributes
+								if (errno != ENOTSUP) {
+									tool_print_err("Failed to set extended attributes on %s: %s\n", local_path, g_strerror(errno));
+									g_free(xattr_value);
+									return FALSE;
+								}
+							}
+							g_free(xattr_value);
+						}
+					}
+
+					f_elem++;
+				}
+			} else {
+				tool_print_info("%s: No extended attributes found\n", local_path);
 			}
 		}
 
@@ -622,6 +658,11 @@ static int sync_main(int ac, char *av[])
 		goto out;
 	}
 
+	if (opt_delete_only && opt_always) {
+		tool_print_err("Options --delete-only and -a (--always) cannot be used at the same time\n");
+		goto out;
+	}
+
 	start = clock();
 
 	s = tool_start_session(TOOL_SESSION_OPEN);
@@ -664,7 +705,9 @@ static int sync_main(int ac, char *av[])
 
 	end = clock();
 	long int duration_s = ((double)(end - start)) / CLOCKS_PER_SEC;
-	int avg_bytes_per_s = duration_s == 0 ? -1 : ((double)bytes_transferred) / duration_s;
+	if (duration_s < 1)
+		duration_s = 1;
+	int avg_bytes_per_s = ((double)bytes_transferred) / duration_s;
 
 	tool_print_info("Processed %d file(s) in %d folder(s). %d file(s) had errors.\n", files_processed, folders_processed, files_with_errors);
 	if (elements_deleted > 0)
@@ -684,8 +727,8 @@ const struct shell_tool shell_tool_sync = {
 	.name = "sync",
 	.main = sync_main,
 	.usages = (char *[]){
-		"[-n] [--force] [--no-progress] [--delete] [--delete-only] [--ignore-errors] --local <path> --remote <remotepath>",
-		"[-n] [--force] [--no-progress] [--delete] [--delete-only] [--ignore-errors] --download --local <path> --remote <remotepath>",
+		"[-n] [--force] [--no-progress] [--delete] [--delete-only | --always] [--ignore-errors] --local <path> --remote <remotepath>",
+		"[-n] [--force] [--no-progress] [--delete] [--delete-only | --always] [--ignore-errors] --download --local <path> --remote <remotepath>",
 		NULL
 	},
 };

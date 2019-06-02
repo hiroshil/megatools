@@ -93,6 +93,7 @@ struct mega_node {
 	guint64 size;
 	glong timestamp;
 	glong local_ts;
+	gchar *xattrs;
 
 	// call addlinks after refresh to get links populated
 	gchar *link;
