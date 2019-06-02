@@ -648,7 +648,7 @@ static int sync_main(int ac, char *av[])
 {
 	gc_object_unref GFile *local_file = NULL;
 	gint status = 1;
-	clock_t start, end;
+	clock_t p_start, p_end;
 
 	tool_init(&ac, &av, "- synchronize a local directory with a remote one", entries,
 			TOOL_INIT_AUTH | TOOL_INIT_UPLOAD_OPTS | TOOL_INIT_DOWNLOAD_OPTS);
@@ -663,7 +663,7 @@ static int sync_main(int ac, char *av[])
 		goto out;
 	}
 
-	start = clock();
+	p_start = g_get_monotonic_time();
 
 	s = tool_start_session(TOOL_SESSION_OPEN);
 	if (!s)
@@ -703,8 +703,8 @@ static int sync_main(int ac, char *av[])
 		mega_session_save(s, NULL);
 	}
 
-	end = clock();
-	long int duration_s = ((double)(end - start)) / CLOCKS_PER_SEC;
+	p_end = g_get_monotonic_time();
+	long int duration_s = ((double)(p_end - p_start)) / 1000000;
 	if (duration_s < 1)
 		duration_s = 1;
 	int avg_bytes_per_s = ((double)bytes_transferred) / duration_s;
