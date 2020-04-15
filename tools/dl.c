@@ -320,6 +320,7 @@ int main(int ac, char *av[])
 {
 	gc_error_free GError *local_err = NULL;
 	gc_regex_unref GRegex *file_regex = NULL, *folder_regex = NULL;
+	gc_regex_unref GRegex *file_regex2 = NULL, *folder_regex2 = NULL;;
 	gint i;
 	int status = 0;
 
@@ -353,10 +354,19 @@ int main(int ac, char *av[])
 				 0, NULL);
 	g_assert(file_regex != NULL);
 
+	file_regex2 = g_regex_new("^https?://mega\\.nz/file/([a-z0-9_-]{8})#([a-z0-9_-]{43})$", G_REGEX_CASELESS,
+                                  0, NULL);
+	g_assert(file_regex2 != NULL);
+
 	folder_regex =
 		g_regex_new("^https?://mega(?:\\.co)?\\.nz/#F!([a-z0-9_-]{8})!([a-z0-9_-]{22})(![a-z0-9_-]{8})?$",
 			    G_REGEX_CASELESS, 0, NULL);
 	g_assert(folder_regex != NULL);
+
+	folder_regex2 =
+		g_regex_new("^https?://mega\\.nz/folder/([a-z0-9_-]{8})#([a-z0-9_-]{22})$",
+			    G_REGEX_CASELESS, 0, NULL);
+	g_assert(folder_regex2 != NULL);
 
 	// create session
 
@@ -377,7 +387,8 @@ int main(int ac, char *av[])
 		gc_free gchar *specific = NULL;
 		gc_free gchar *link = tool_convert_filename(av[i], FALSE);
 
-		if (g_regex_match(file_regex, link, 0, &m1)) {
+		if (g_regex_match(file_regex, link, 0, &m1) ||
+                    g_regex_match(file_regex2, link, 0, &m1)) {
 			handle = g_match_info_fetch(m1, 1);
 			key = g_match_info_fetch(m1, 2);
 
@@ -398,7 +409,8 @@ int main(int ac, char *av[])
 				if (opt_print_names)
 					g_print("%s\n", cur_file);
 			}
-		} else if (g_regex_match(folder_regex, link, 0, &m2)) {
+		} else if (g_regex_match(folder_regex, link, 0, &m2) ||
+                           g_regex_match(folder_regex2, link, 0, &m2)) {
 			if (opt_stream) {
 				g_printerr("ERROR: Can't stream from a directory!\n");
 				tool_fini(s);
