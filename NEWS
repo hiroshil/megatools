@@ -1,3 +1,12 @@
+megatools 1.10.3 - 2020-04-15
+=============================
+
+This is a bugfix release.
+
+Fixes:
+- Add support for new format of mega.nz links (by Alberto Garcia)
+
+
 megatools 1.10.2 - 2018-07-31
 =============================
 

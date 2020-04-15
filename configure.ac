@@ -1,5 +1,5 @@
 AC_PREREQ(2.60)
-AC_INIT([megatools],[1.10.2],[megous@megous.com],[megatools])
+AC_INIT([megatools],[1.10.3],[megous@megous.com],[megatools])
 AC_CONFIG_SRCDIR([Makefile.am])
 AC_CONFIG_MACRO_DIR([m4])
 AC_CONFIG_HEADER([config.h])
