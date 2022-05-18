@@ -77,20 +77,6 @@ You can contact the chockolatey package maintainer here:
   https://github.com/megous/megatools/issues/347
 
 
-Windows Quirks
-==============
-
-On Windows, if you see weird characters in your megals output, you'll need
-to set correct CHARSET environment variable. For example on Czech Windows
-this would mean executing this command in cmd before using the tools:
-
-  set CHARSET=CP852
-
-This is just a cosmetic issue. Internally, megatools always work with UTF-8
-file names, and even if the tool's terminal output is corrupted, files names
-of downloaded/uploaded files will be correct.
-
-
 Installation on macOS
 =====================
 
