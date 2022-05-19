@@ -270,7 +270,7 @@ Some third party tools can be found at:
 Author
 ======
 
-Megatools were written by Ondřej Jirman <megatools@megous.com>, 2013-2019
+Megatools were written by Ondřej Jirman <megatools@megous.com>, 2013-2022
 
 My PGP key can be found at: https://megous.com/key.txt
   (Fingerprint is: EBFBDDE11FB918D44D1F56C1F9F0A873BE9777ED)
@@ -281,26 +281,30 @@ Official website is: https://megatools.megous.com
 Contributors
 ============
 
-- Chris Tarazi <tarazichris@gmail.com>
-- Tom Maneiro <tomman@tsdx.net.ve>
-- bAndie91 <bandie9100@gmail.com>
 - Alberto Garcia <berto@igalia.com>
+- aurelien <aurelien.antunes@gmail.com>
+- bAndie91 <bandie9100@gmail.com>
+- Chris Tarazi <tarazichris@gmail.com>
+- cyrozap <cyrozap@gmail.com>
+- Dal1a <waveh@trimsj.com>
 - David Guillen Fandos <david@davidgf.net>
 - Erik Nordstrøm <erik@nordstroem.no>
+- ivesen <ivesen@ivesen.moe>
 - Johnathan Jenkins <john@nixheads.co.uk>
 - Kagami Hiiragi <kagami@genshiken.org>
 - Matthew Schultz <mattsch@gmail.com>
+- Mert Dirik <mertdirik@gmail.com>
 - Michael Ledin <mledin89@gmail.com>
 - Michael Ripley <zkxs00@gmail.com>
-- Palmer Dabbelt <palmer@dabbelt.com>
-- RealDolos <dolos@cock.li>
-- Viktor (Icon) VAD <vad.viktor@gmail.com>
-- cyrozap <cyrozap@gmail.com>
 - nyuszika7h <nyuszika7h@gmail.com>
+- Palmer Dabbelt <palmer@dabbelt.com>
 - protomouse <root@protomou.se>
+- RealDolos <dolos@cock.li>
 - strupo <sheeit@users.noreply.github.com>
+- taiyu <taiyu.len@gmail.com>
+- Tom Maneiro <tomman@tsdx.net.ve>
+- Viktor (Icon) VAD <vad.viktor@gmail.com>
 - wdlkmpx <wdlkmpx@gmail.com>
-- dal1a <waveh@trimsj.com>
 
 
 Support and bug reports
