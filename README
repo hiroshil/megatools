@@ -151,6 +151,12 @@ On Debian, Ubuntu:
   apt-get -y install build-essential libglib2.0-dev libssl-dev \
     libcurl4-openssl-dev
 
+  If you want to build man pages, too, you need to:
+
+    apt install asciidoc docbook2x --no-install-recommends
+
+  or disable the build of man pages via meson -Dman=false option.
+
 On Fedora and CentOS:
 
   yum -y install gcc make glib2-devel libcurl-devel openssl-devel
